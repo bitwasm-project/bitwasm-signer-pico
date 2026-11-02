@@ -61,10 +61,8 @@ signet で署名から送信まで一巡しました。ここに載せた数値�
 
 ### 実機
 
-ビルド済みのファームは [Releases](https://github.com/bitwasm-project/bitwasm-signer-pico/releases) にあります
-（`bitwasm-signer-pico.uf2` が mainnet、`bitwasm-signer-pico-signet.uf2` が signet）。BOOTSEL を押しながら USB で
-つなぎ、表示されたドライブに UF2 をコピーしてください。自分でビルドした場合も同じバイト列になります
-（[再現可能ビルド](reproducible-build.md)をご覧ください）。
+ビルド済みのファームはまだ公開していません。[再現可能ビルド](reproducible-build.md)の手順でビルドし、BOOTSEL を
+押しながら USB でつなぎ、表示されたドライブに `build/rp2350/app.uf2` をコピーしてください。
 
 部品と論理的なピン割り当ては [hardware.md](../hardware.md)（英語）、実配線は [breadboard.md](breadboard.md)（日本語）をご覧ください。
 

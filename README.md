@@ -71,10 +71,8 @@ PSBT v2 is not supported.
 
 ### On hardware
 
-Prebuilt firmware is on the [Releases](https://github.com/bitwasm-project/bitwasm-signer-pico/releases) page:
-`bitwasm-signer-pico.uf2` for mainnet, `bitwasm-signer-pico-signet.uf2` for signet. Hold BOOTSEL while connecting
-the Pico 2 over USB and copy the UF2 onto the drive. Building it yourself gives the same bytes
-([docs/reproducible-build.md](docs/reproducible-build.md)).
+There is no prebuilt firmware release yet. Build it yourself ([docs/reproducible-build.md](docs/reproducible-build.md)),
+hold BOOTSEL while connecting the Pico 2 over USB, and copy `build/rp2350/app.uf2` onto the drive.
 
 Parts and wiring: [hardware](docs/hardware.md), [breadboard wiring](docs/breadboard.md). Japanese: [breadboard wiring](docs/ja/breadboard.md).
 

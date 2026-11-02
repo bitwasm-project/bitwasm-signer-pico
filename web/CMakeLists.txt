@@ -34,8 +34,14 @@ list(REMOVE_DUPLICATES WEB_SRC)
 add_executable(signer ${WEB_SRC} ${WAMR_RUNTIME_LIB_SOURCE})
 # The same QR reader as the firmware
 set(QR_READER_LIB ${CMAKE_CURRENT_BINARY_DIR}/qr_reader/wasm32-unknown-emscripten/release/libqr_reader.a)
+set(CARGO_HOME $ENV{CARGO_HOME})
+if(NOT CARGO_HOME)
+  set(CARGO_HOME $ENV{HOME}/.cargo)
+endif()
 add_custom_target(qr_reader_lib
-  COMMAND cargo build --release --locked --target wasm32-unknown-emscripten
+  COMMAND ${CMAKE_COMMAND} -E env
+    "RUSTFLAGS=--remap-path-prefix=${CARGO_HOME}=/cargo"
+    cargo build --release --locked --target wasm32-unknown-emscripten
     --target-dir ${CMAKE_CURRENT_BINARY_DIR}/qr_reader
   WORKING_DIRECTORY ${SRC}/runtime/qr_reader
   BYPRODUCTS ${QR_READER_LIB}

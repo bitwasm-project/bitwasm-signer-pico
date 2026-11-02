@@ -37,7 +37,7 @@ signet で署名から送信まで一巡しました。ここに載せた数値�
 
 [公開デモページ](https://bitwasm-project.github.io/bitwasm-signer-pico/)から試せます。テストシードを使うデモなので、本物の SeedQR を読み込ませず、実資金を扱わないでください。操作方法と実装の説明は [web/README.md](../../web/README.md)（英語）をご覧ください。
 
-[![ブラウザ上のファームウェアメニュー、操作パッド、テストシードの注意書きを表示したデモ画面](../web-demo.png)](https://bitwasm-project.github.io/bitwasm-signer-pico/)
+[![ブラウザ上でファームウェアの最初のメニューと操作パッドを表示したデモ画面](../web-demo.png)](https://bitwasm-project.github.io/bitwasm-signer-pico/)
 
 ## Pico 2 の実装
 

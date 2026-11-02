@@ -5,8 +5,8 @@
 **Please do not report security vulnerabilities through public GitHub issues.**
 
 Use GitHub's private vulnerability reporting on this repository
-([Security → Report a vulnerability](https://github.com/bitwasm-project/bitwasm-signer-pico/security/advisories/new)),
-or email the maintainer. Public key: https://github.com/habakan.gpg
+([Security → Report a vulnerability](https://github.com/bitwasm-project/bitwasm-signer-pico/security/advisories/new)).
+Maintainer's public key: https://github.com/habakan.gpg
 
 Fingerprint: `8BD4 8DD6 70AF 9B34 7EA0  41CF 36D4 93A2 8A8B EB79`
 
@@ -43,5 +43,5 @@ findings — but a concrete exploit of one of them still is:
 
 - An attached debug probe (SWD) can read the master key out of RAM while a seed is loaded.
   Measured and documented in [docs/signing-architecture.md](docs/signing-architecture.md).
-- Multisig and BIP39 passphrase input are planned but not supported by the current firmware. PSBT v2
-  is also unsupported. The firmware rejects unsupported input rather than handling it.
+- BIP39 passphrase input is planned but not supported by the current firmware. PSBT v2 is also
+  unsupported. The firmware rejects unsupported input rather than handling it.

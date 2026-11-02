@@ -55,7 +55,9 @@
 <text x="300" y="550" fill="#6b7280" font-size="11.5">8-bit parallel · I²C · PIO capture</text>
 <text x="520" y="528" fill="#1a1d24" font-size="12.5">Display · ST7789V</text>
 <text x="520" y="550" fill="#6b7280" font-size="11.5">SPI · two buttons via GPIO</text>
-<svg x="790" y="505" width="52" height="72" viewBox="850 650 1300 3250" preserveAspectRatio="xMidYMid slice"><image href="pico-2-cc0.jpg" x="0" y="0" width="3024" height="4032"/></svg>
+<rect x="792" y="507" width="48" height="68" rx="4" fill="#2f6b4f" stroke="#1f4a36" stroke-width="1.2"/>
+<rect x="804" y="530" width="24" height="24" rx="2" fill="#1a1d24"/>
+<text x="816" y="545" fill="#e5e7eb" font-size="7" text-anchor="middle">RP2350</text>
 <text x="816" y="584" fill="#6b7280" font-size="10.5" text-anchor="middle">Pico 2 H</text>
 
 <text x="50" y="642" fill="#6b7280" font-size="11.5">bitwasm-signer code: parser.wasm, signer, and SeedQR parser under components/parts/. Pico-specific code lives in this repository.</text>

@@ -2,9 +2,7 @@
 
 <sup>[日本語](ja/breadboard.md)</sup>
 
-<img src="pico-2-cc0.jpg" alt="Raspberry Pi Pico 2" width="320">
-
-Photo: [Profpcde / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Top_view_of_a_Raspberry_Pi_Pico_2_microcontroller_board.jpg), CC0 1.0. Raspberry Pi is a trademark of Raspberry Pi Ltd. This project is not endorsed by Raspberry Pi Ltd. The build uses a Pico 2 H.
+Raspberry Pi is a trademark of Raspberry Pi Ltd. This project is not endorsed by Raspberry Pi Ltd. The build uses a Pico 2 H.
 
 This documents the wiring as built. Update this page when the wiring changes. The logical pin assignments are in [hardware.md](hardware.md); the firmware definitions are in [src/board_pins.h](../src/board_pins.h).
 

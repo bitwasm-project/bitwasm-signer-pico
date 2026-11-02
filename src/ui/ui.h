@@ -11,7 +11,7 @@
 #define UI_W 240
 #define UI_H 240
 /* Shown at the top right of every screen; must fit within UI_COLS */
-#define UI_APP_NAME "Baremetal wasm DIY Signer"
+#define UI_APP_NAME "bitwasm-signer-pico"
 #define UI_COLS 30 /* with the 8x16 font */
 #define UI_ROWS 15
 #define UI_MAX_SCREENS (PLAN_MAX_OUTPUTS + 2)

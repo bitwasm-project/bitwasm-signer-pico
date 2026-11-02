@@ -2,9 +2,7 @@
 
 <sup>[English](../breadboard.md)</sup>
 
-<img src="../pico-2-cc0.jpg" alt="Raspberry Pi Pico 2" width="320">
-
-写真: [Profpcde / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Top_view_of_a_Raspberry_Pi_Pico_2_microcontroller_board.jpg)、CC0 1.0。Raspberry Pi is a trademark of Raspberry Pi Ltd. このプロジェクトは同社の承認を受けたものではありません。実装では Pico 2 H を使用。
+Raspberry Pi is a trademark of Raspberry Pi Ltd. このプロジェクトは同社の承認を受けたものではありません。実装では Pico 2 H を使用。
 
 実際に組んでいる配線。変えたらこのファイルも直す。論理的なピン割り当ては [hardware.md](../hardware.md)、
 定義は [src/board_pins.h](../../src/board_pins.h)。

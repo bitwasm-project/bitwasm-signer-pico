@@ -43,7 +43,7 @@ Found a security problem? [SECURITY.md](SECURITY.md) — **not** a public issue.
 Try the [live firmware demo](https://bitwasm-project.github.io/bitwasm-signer-pico/). It uses a test seed; never scan a real
 SeedQR or use real funds. See [web/README.md](web/README.md) for the controls and implementation.
 
-[![Browser demo showing the firmware menu, controls, and test-seed warning](docs/web-demo.png)](https://bitwasm-project.github.io/bitwasm-signer-pico/)
+[![Browser demo showing the firmware's first menu and the controls](docs/web-demo.png)](https://bitwasm-project.github.io/bitwasm-signer-pico/)
 
 ## The Pico 2 implementation
 

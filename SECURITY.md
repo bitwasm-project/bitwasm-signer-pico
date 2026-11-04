@@ -5,8 +5,8 @@
 **Please do not report security vulnerabilities through public GitHub issues.**
 
 Use GitHub's private vulnerability reporting on this repository
-([Security → Report a vulnerability](https://github.com/habakan/bitwasm-signer-pico/security/advisories/new)),
-or email the maintainer. Public key: https://github.com/habakan.gpg
+([Security → Report a vulnerability](https://github.com/bitwasm-project/bitwasm-signer-pico/security/advisories/new)).
+Maintainer's public key: https://github.com/habakan.gpg
 
 Fingerprint: `8BD4 8DD6 70AF 9B34 7EA0  41CF 36D4 93A2 8A8B EB79`
 
@@ -29,11 +29,10 @@ reproduce, generate a throwaway one and say so.
 
 ## Scope
 
-This policy covers this repository and our quirc fork
-([`mcu` branch](https://github.com/habakan/quirc)), which the firmware uses to read QR codes.
+This policy covers this repository.
 
-Problems in `parser.wasm`, `signer.wasm`, their host libraries or the browser viewer belong to
-[bitwasm-signer](https://github.com/habakan/bitwasm-signer/security/policy). If you are not sure which one is
+Problems in `parser.wasm`, `signer.wasm`, the QR reader, their host libraries or the browser viewer belong to
+[bitwasm-signer](https://github.com/bitwasm-project/bitwasm-signer/security/policy). If you are not sure which one is
 affected, report it here.
 
 ## What is already known
@@ -44,5 +43,5 @@ findings — but a concrete exploit of one of them still is:
 
 - An attached debug probe (SWD) can read the master key out of RAM while a seed is loaded.
   Measured and documented in [docs/signing-architecture.md](docs/signing-architecture.md).
-- Multisig and BIP39 passphrase input are planned but not supported by the current firmware. PSBT v2
-  is also unsupported. The firmware rejects unsupported input rather than handling it.
+- BIP39 passphrase input is planned but not supported by the current firmware. PSBT v2 is also
+  unsupported. The firmware rejects unsupported input rather than handling it.

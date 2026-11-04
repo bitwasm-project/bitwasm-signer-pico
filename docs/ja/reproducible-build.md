@@ -85,7 +85,7 @@ make check-wasm     # wasm-tools が必要です（brew install wasm-tools）
 | start function がない | 読み込み時にコードが実行されない |
 | 未知の custom section がない | 余分なデータが追加されていない |
 
-ブラウザの例と補助モジュールは [bitwasm-signer](https://github.com/habakan/bitwasm-signer/tree/main/examples/viewer) で管理しています。
+ブラウザの例と補助モジュールは [bitwasm-signer](https://github.com/bitwasm-project/bitwasm-signer/tree/main/examples/viewer) で管理しています。
 
 ## 依存関係も固定する
 
@@ -96,7 +96,9 @@ make check-wasm     # wasm-tools が必要です（brew install wasm-tools）
 | libsecp256k1 | コミット |
 | WAMR | upstream の固定コミット（[PR #5123](https://github.com/wasm-micro-runtime/wasm-micro-runtime/pull/5123) を含む） |
 | pico-sdk | タグに対応するコミット |
-| quirc / QR-Code-generator / spleen | コミット |
+| QR-Code-generator / spleen | コミット |
+| QR リーダー（`bitwasm-signer`） | コミット（`src/runtime/qr_reader/Cargo.toml` と `Cargo.lock`） |
+| Rust | 1.95.0（`src/runtime/qr_reader/rust-toolchain.toml`）。rustup が署名を検証する。ハッシュでは固定していない |
 
 依存を更新するときは差分を確認し、`Makefile` の対応する `*_REV` も更新してください。
 

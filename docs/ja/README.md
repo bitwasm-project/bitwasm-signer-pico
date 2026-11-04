@@ -5,11 +5,11 @@
 > **bitwasm-signer** ── Bitcoin、WebAssembly、signer。**pico** は動作先の RP2350 から。
 
 
-[![CI](https://github.com/habakan/bitwasm-signer-pico/actions/workflows/ci.yml/badge.svg)](https://github.com/habakan/bitwasm-signer-pico/actions/workflows/ci.yml)
+[![CI](https://github.com/bitwasm-project/bitwasm-signer-pico/actions/workflows/ci.yml/badge.svg)](https://github.com/bitwasm-project/bitwasm-signer-pico/actions/workflows/ci.yml)
 
 英語版は [README.md](../../README.md) です。
 
-`bitwasm-signer-pico` は [bitwasm-signer](https://github.com/habakan/bitwasm-signer) の Raspberry Pi Pico 2（RP2350）参照実装です。
+`bitwasm-signer-pico` は [bitwasm-signer](https://github.com/bitwasm-project/bitwasm-signer) の Raspberry Pi Pico 2（RP2350）参照実装です。
 ファームウェア、基板固有の UI・カメラ処理、配線資料、実機連携の検証を置いています。
 再利用モジュールと言語別の利用例は bitwasm-signer 側で管理しています。
 
@@ -23,21 +23,21 @@ signet で署名から送信まで一巡しました。ここに載せた数値�
 
 セキュリティ上の問題は [SECURITY.md](../../SECURITY.md)（英語）に従って報告してください。**公開 issue には書かないでください。**
 
-ブラウザの [PSBT ビューア](https://github.com/habakan/bitwasm-signer/tree/main/examples/viewer) は bitwasm-signer 側で管理しています。
+ブラウザの [PSBT ビューア](https://github.com/bitwasm-project/bitwasm-signer/tree/main/examples/viewer) は bitwasm-signer 側で管理しています。
 
 デバイスが使う `parser.wasm` は bitwasm-signer の成果物です。画面の `Parser hash` と
 `make check-repro` の記録を突き合わせられます。
 
 | | |
 |---|---|
-| モジュールの仕様と他環境での利用 | [bitwasm-signer](https://github.com/habakan/bitwasm-signer) |
-| parser の ABI とホスト実装例 | [bitwasm-signer parser](https://github.com/habakan/bitwasm-signer/tree/main/parser)（英語） |
+| モジュールの仕様と他環境での利用 | [bitwasm-signer](https://github.com/bitwasm-project/bitwasm-signer) |
+| parser の ABI とホスト実装例 | [bitwasm-signer parser](https://github.com/bitwasm-project/bitwasm-signer/tree/main/parser)（英語） |
 
 ## ブラウザデモ
 
-[公開デモページ](https://habakan.github.io/bitwasm-signer-pico/)から試せます。テストシードを使うデモなので、本物の SeedQR を読み込ませず、実資金を扱わないでください。操作方法と実装の説明は [web/README.md](../../web/README.md)（英語）をご覧ください。
+[公開デモページ](https://bitwasm-project.github.io/bitwasm-signer-pico/)から試せます。テストシードを使うデモなので、本物の SeedQR を読み込ませず、実資金を扱わないでください。操作方法と実装の説明は [web/README.md](../../web/README.md)（英語）をご覧ください。
 
-[![ブラウザ上のファームウェアメニュー、操作パッド、テストシードの注意書きを表示したデモ画面](../web-demo.png)](https://habakan.github.io/bitwasm-signer-pico/)
+[![ブラウザ上でファームウェアの最初のメニューと操作パッドを表示したデモ画面](../web-demo.png)](https://bitwasm-project.github.io/bitwasm-signer-pico/)
 
 ## Pico 2 の実装
 
@@ -53,7 +53,7 @@ signet で署名から送信まで一巡しました。ここに載せた数値�
 | 検査・確認画面の組み立て | 147 ms | ネイティブ |
 | 署名（2 入力、ECDSA + Schnorr） | 126 ms | ネイティブ。embit で独立検証 |
 | アニメーション QR 出力 | 1 パート 95 ms | `@ngraveio/bc-ur` で復元・バイト一致 |
-| RAM | 約 341KB / 520KB | quirc と PSBT バッファはヒープを共有 |
+| RAM | 約 346KB / 520KB | QR リーダーと PSBT バッファはヒープを共有 |
 
 このリポジトリでは、RP2350 実機、macOS のホスト、QEMU で確認しています。
 
@@ -61,10 +61,8 @@ signet で署名から送信まで一巡しました。ここに載せた数値�
 
 ### 実機
 
-ビルド済みのファームは [Releases](https://github.com/habakan/bitwasm-signer-pico/releases) にあります
-（`bitwasm-signer-pico.uf2` が mainnet、`bitwasm-signer-pico-signet.uf2` が signet）。BOOTSEL を押しながら USB で
-つなぎ、表示されたドライブに UF2 をコピーしてください。自分でビルドした場合も同じバイト列になります
-（[再現可能ビルド](reproducible-build.md)をご覧ください）。
+ビルド済みのファームはまだ公開していません。[再現可能ビルド](reproducible-build.md)の手順でビルドし、BOOTSEL を
+押しながら USB でつなぎ、表示されたドライブに `build/rp2350/app.uf2` をコピーしてください。
 
 部品と論理的なピン割り当ては [hardware.md](../hardware.md)（英語）、実配線は [breadboard.md](breadboard.md)（日本語）をご覧ください。
 
@@ -108,8 +106,6 @@ make check-psbt        # PSBT 一巡 + UR の往復 + 署名を embit で独立�
 make check-ui          # 画面の組み立て
 make check-seedqr      # SeedQR の読み取り（ASan 付き）
 make check-qemu-psbt   # RV32 で PSBT 一巡（ホストの出力と一致するか）
-make check-qemu-qr     # quirc の命令数
-make check-qr-mac      # quirc と zxing-cpp の読取可否を比べる
 make check-camera-sim  # camera.pio を Python のシミュレータで検証
 make -C components/parts/parser test        # 解析器のベクタ（529 項目）
 make -C components/parts/parser check-fuzz  # 解析器へのファジング
@@ -129,8 +125,8 @@ make -C components/parts/parser check-fuzz  # 解析器へのファジング
 
 | | | TCB |
 |---|---|---|
-| `components/parts/` | [bitwasm-signer](https://github.com/habakan/bitwasm-signer) の固定 submodule。再利用する parser / signer モジュールを含む。仕様とホスト実装例の管理先は bitwasm-signer | **外** |
-| `components/qr/` | QR デコーダ（submodule [quirc](https://github.com/habakan/quirc) の `mcu` ブランチ。FPU 無し向けに固定小数点化） | 外 |
+| `components/parts/` | [bitwasm-signer](https://github.com/bitwasm-project/bitwasm-signer) の固定 submodule。再利用する parser / signer モジュールを含む。仕様とホスト実装例の管理先は bitwasm-signer | **外** |
+| `src/runtime/qr_reader/` | QR リーダー。Rust 製で [bitwasm-signer](https://github.com/bitwasm-project/bitwasm-signer/tree/main/qr) のものを `Cargo.toml` で固定 | 外 |
 | `src/` | ファームの入口（`main.c`）とピン割り当て（`board_pins.h`） | 内 |
 | `src/drivers/` | 液晶（ST7789）、ボタン、カメラ（PIO + DMA）。実機でしか動かない | 内 |
 | `src/ui/` | 240x240 の画面を組む。表示先に依存しない | 内 |
@@ -169,8 +165,6 @@ pico-sdk 2.3.1、QR-Code-generator、spleen フォント、RISC-V ツールチ�
 - **WAMR**: classic interpreter の `i64.store` が 4 byte 境界を前提にしていた問題の修正を、固定した upstream commit に含めています
   （[PR #5123](https://github.com/wasm-micro-runtime/wasm-micro-runtime/pull/5123)、2026-09-30 マージ）。
   非整列アクセスを許さない CPU で発生し、QEMU では再現しません。
-- **quirc**: 自前フォーク（`mcu` ブランチ）で固定小数点化と未マージのセキュリティ修正の取り込みを行い、
-  UBSan とファジングを実施しています。
 
 ## 貢献
 

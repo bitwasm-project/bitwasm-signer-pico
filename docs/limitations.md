@@ -51,7 +51,7 @@ Not reviewed by a third party. signet only. See [Disclaimer](../README.md#discla
 - While unlocked, the master key and chain code are in RAM — they must be, to sign.
   **An attached debug probe (SWD) can read them.** Measured: see
   [docs/signing-architecture.md](signing-architecture.md). Disconnect the probe for real use.
-- `Lock (wipe seed)` zeroes them; this was verified by dumping RAM before and after.
+- `Clear seed` zeroes them; this was verified by dumping RAM before and after.
 - The mnemonic, the BIP39 seed, the SeedQR payload, the camera frame and derived child keys are
   wiped after use, and signing nonces do not survive — all verified with `tools/security/ram_keys.py`.
 - Entering the USB bootloader (BOOTSEL) clears SRAM entirely, so that path cannot read a leftover key.
@@ -66,7 +66,7 @@ Not reviewed by a third party. signet only. See [Disclaimer](../README.md#discla
 - A PSBT whose previous transactions are large may not fit. For a single-signature SegWit input,
   omitting `non_witness_utxo` when `witness_utxo` is present can reduce its size; a faucet
   transaction with 2,323 outputs made a PSBT of 77KB, which is 770 QR frames.
-- The device's quirc decoder needs the code to fill most of the frame and cannot read a display from
+- The device's QR reader needs the code to fill most of the frame and cannot read a display from
   across a room.
 - A QR decoder is not a trust boundary. Whatever it produces is parsed and re-validated.
 

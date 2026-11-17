@@ -16,7 +16,9 @@
 #include "camera.h"
 #include "qr_reader.h"
 #include "seedqr.h"
+#if !QRBOOT_APP
 #include "parser_wasm.h"
+#endif
 #include "test_psbt.h"
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
@@ -26,8 +28,10 @@
 
 /* parser.wasm's linear memory comes out of this pool too, about 132KB with UR reassembly and
  * encoding. Measured at 149KB peak under QEMU */
+#if !QRBOOT_APP
 static char pool[160 * 1024];
 static uint8_t parser_wasm_rw[sizeof(parser_wasm)];
+#endif
 /* Not needed at the same time as the QR reader (106KB, 77KB of it the image), so this is taken from
  * the heap only for the signing step */
 #define SIGNED_PSBT_MAX (PARSER_PSBT_MAX + 2048)
@@ -416,6 +420,10 @@ static void show_xpub(unsigned int purpose) {
 /* The hash of the parser.wasm actually loaded. Matching it against the bitwasm-signer viewer is
  * how you confirm the device is running the same module you are */
 static void show_parser_hash(void) {
+#if QRBOOT_APP
+    /* The parser is part of this app, whose hash the loader showed before running it */
+    message("Parser", "Built into this app. Its hash was shown when it was loaded.", 0);
+#else
     static ui_screen_t s;
     uint8_t h[32];
 
@@ -426,6 +434,7 @@ static void show_parser_hash(void) {
     for (int i = 0; i < 32; i++) printf("%02x", h[i]);
     printf("\n");
     wait_key();
+#endif
 }
 
 static void watch_only_menu(void) {
@@ -504,10 +513,14 @@ int main(void) {
     buttons_init();
     printf("\nbitwasm-signer-pico (%s)\n", TESTNET ? "testnet/signet" : "mainnet");
 
+#if QRBOOT_APP
+    if (!core_init(TESTNET ? CORE_TESTNET : CORE_MAINNET) || !parser_host_init(NULL, 0, NULL, 0)) {
+#else
     memcpy(parser_wasm_rw, parser_wasm, sizeof(parser_wasm_rw));
     /* A TESTNET=1 build targets signet and testnet: tb1 addresses, derived under m/84'/1'/... */
     if (!core_init(TESTNET ? CORE_TESTNET : CORE_MAINNET) ||
         !parser_host_init(parser_wasm_rw, sizeof(parser_wasm_rw), pool, sizeof(pool))) {
+#endif
         message("Init failed", NULL, 1);
         return 1;
     }

@@ -5,6 +5,7 @@
 
 pack prints the SHA-256 the loader shows before it runs the app, and writes sheet.html: an A4 sheet for
 an heir, with the steps, the hash and the codes. It holds no secret; the key stays on its SeedQR plate.
+It also writes anim.html, the same app as an animated QR to show on a screen (--anim-version).
 """
 import argparse
 import base64
@@ -38,6 +39,16 @@ def capacity(version):
     return (bits // 11 * 2 + (1 if bits % 11 >= 6 else 0) - 8) // 8 * 8
 
 
+def codes(text, version):
+    per = capacity(version)
+    bodies = [text[i : i + per] for i in range(0, len(text), per)]
+    if len(bodies) > 1295:
+        sys.exit("more than 1295 codes")
+    b36 = lambda n: B36[n // 36] + B36[n % 36]
+    lines = [f"B$ZB{b36(len(bodies))}{b36(i)}{b}" for i, b in enumerate(bodies)]  # B: binary, the spec's letter for trials
+    return [QrCode.encode_segments([QrSegment.make_alphanumeric(l)], QrCode.Ecc.LOW, version, version, boostecl=False) for l in lines]
+
+
 def pack(a):
     wasm = Path(a.input).read_bytes()
     if wasm[:4] != b"\0asm":
@@ -46,20 +57,17 @@ def pack(a):
     # BBQr's Z encoding: zlib with wbits 10 and no header, so a receiver needs only a 1 KiB window
     c = zlib.compressobj(9, zlib.DEFLATED, -10)
     text = base64.b32encode(c.compress(wasm) + c.flush()).decode().rstrip("=")
-    per = capacity(a.version)
-    bodies = [text[i : i + per] for i in range(0, len(text), per)]
-    if len(bodies) > 1295:
-        sys.exit("more than 1295 codes")
-    b36 = lambda n: B36[n // 36] + B36[n % 36]
-    lines = [f"B$ZB{b36(len(bodies))}{b36(i)}{b}" for i, b in enumerate(bodies)]  # B: binary, the spec's letter for trials
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
-    for i, line in enumerate(lines):
-        png(QrCode.encode_segments([QrSegment.make_alphanumeric(line)], QrCode.Ecc.LOW, a.version, a.version, boostecl=False), out / f"qr-{i:02d}.png")
+    printed = codes(text, a.version)
+    for i, qr in enumerate(printed):
+        png(qr, out / f"qr-{i:02d}.png")
     groups = " ".join(digest[i : i + 4] for i in range(0, 64, 4))
-    (out / "sheet.html").write_text(sheet(a, len(wasm), len(lines), groups))
+    (out / "sheet.html").write_text(sheet(a, len(wasm), len(printed), groups))
+    shown = codes(text, a.anim_version)
+    (out / "anim.html").write_text(anim(a, shown, groups))
     print(f"app      {len(wasm)} bytes, {len(text) * 5 // 8} compressed")
-    print(f"codes    {len(lines)} at version {a.version}")
+    print(f"codes    {len(printed)} at version {a.version}, {len(shown)} animated at version {a.anim_version}")
     print(f"sha256   {groups}")
 
 
@@ -83,6 +91,8 @@ TEXT = {
         "fields": ["Fingerprint", "作成日", "メモ"],
         "codes": "署名器の QR",
         "codeinfo": "{n} 枚、各 Version {v}。順不同で読み取れます。",
+        "anim": "署名器のアニメーション QR",
+        "animinfo": "ローダーの「Start camera」で読みます。{n} コマを繰り返し表示します。読み落としは次の周で拾えます。",
     },
     "en": {
         "title": "Bitcoin signer for inheritance",
@@ -103,8 +113,53 @@ TEXT = {
         "fields": ["Fingerprint", "Made on", "Notes"],
         "codes": "Signer codes",
         "codeinfo": "{n} codes at version {v}. Read them in any order.",
+        "anim": "Signer as an animated QR",
+        "animinfo": "Read it with Start camera in the loader. The {n} frames repeat; a missed one comes round again.",
     },
 }
+
+
+def anim(a, qrs, groups):
+    t, side = TEXT[a.lang], qrs[0].get_size()
+    # Each frame's modules row by row, one bit each, so the page carries a few KiB a frame and no image
+    frames = []
+    for qr in qrs:
+        bits = [qr.get_module(i % side, i // side) for i in range(side * side)]
+        frames.append(base64.b64encode(bytes(sum(b << (7 - j) for j, b in enumerate(bits[k : k + 8])) for k in range(0, len(bits), 8))).decode())
+    return f"""<!doctype html><html lang="{a.lang}"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>{t["anim"]}</title>
+<style>
+body {{ margin: 0; background: #fff; color: #000; font: 14px/1.5 "Hiragino Sans", system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; min-height: 100vh; box-sizing: border-box }}
+h1 {{ font-size: 16px; margin: 0 }} p {{ margin: 0; text-align: center; max-width: 640px }}
+.mono {{ font-family: ui-monospace, Menlo, monospace }}
+canvas {{ width: min(92vw, calc(100vh - 190px)); aspect-ratio: 1; image-rendering: pixelated }}
+.row {{ display: flex; gap: 8px; align-items: center }}
+button {{ font: inherit; padding: 6px 12px }} button.on {{ font-weight: 700; outline: 2px solid #000 }}
+</style>
+<h1>{t["anim"]}</h1>
+<p>{t["animinfo"].format(n=len(qrs))}</p>
+<p class=mono>SHA-256 {groups}</p>
+<canvas id=c width={side + 8} height={side + 8}></canvas>
+<div class=row><span id=n class=mono></span><button id=pause>||</button><span>fps</span><button>2</button><button class=on>4</button><button>8</button></div>
+<script>
+const F = {frames!r}, S = {side}, c = document.getElementById("c"), x = c.getContext("2d");
+let i = 0, fps = 4, timer = 0;
+function draw() {{
+  const b = Uint8Array.from(atob(F[i]), (ch) => ch.charCodeAt(0));
+  x.fillStyle = "#fff", x.fillRect(0, 0, S + 8, S + 8), x.fillStyle = "#000";
+  for (let k = 0; k < S * S; k++) if (b[k >> 3] & (128 >> (k & 7))) x.fillRect(4 + (k % S), 4 + ((k / S) | 0), 1, 1);
+  document.getElementById("n").textContent = `${{i + 1}} / ${{F.length}}`;
+  i = (i + 1) % F.length;
+}}
+function play() {{ clearInterval(timer), (timer = setInterval(draw, 1000 / fps)); }}
+document.querySelectorAll("button:not(#pause)").forEach((btn) => (btn.onclick = () => {{
+  document.querySelector("button.on").classList.remove("on"), btn.classList.add("on"), (fps = +btn.textContent), play();
+}}));
+document.getElementById("pause").onclick = () => (timer ? (clearInterval(timer), (timer = 0)) : play());
+draw(), play();
+</script>
+</html>
+"""
 
 
 def sheet(a, size, n, groups):
@@ -160,6 +215,7 @@ ap.add_argument("mode", choices=["pack", "text"])
 ap.add_argument("input")
 ap.add_argument("outdir")
 ap.add_argument("--version", type=int, default=40)
+ap.add_argument("--anim-version", type=int, default=20, help="version of anim.html's frames")
 ap.add_argument("--lang", choices=sorted(TEXT), default="ja")
 ap.add_argument("--module", type=float, default=0.32, help="printed module size in mm")
 ap.add_argument("--loader-url", default="https://bitwasm-project.github.io/bitwasm-signer-pico/qrboot/")

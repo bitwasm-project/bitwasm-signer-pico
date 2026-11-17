@@ -33,5 +33,8 @@ will do; `tools/qrboot/serve.py` serves it locally.
 (`--lang ja|en`, `--loader-url`, `--module` for the printed module size). It holds no secret. The key
 stays on its SeedQR plate, which the app asks for.
 
+`anim.html` is the same app as an animated QR for a screen, its frames at `--anim-version` (20 by
+default, 92 frames) so a phone reads each at a glance.
+
 The app links wasi-libc's `vsnprintf`, which names `fd_write` and `fd_seek`; the loader provides them as
 stubs that are never called.

@@ -27,6 +27,7 @@ onmessage = async ({ data: { wasm, ctrlSab, frameSab, screenSab } }) => {
     sleep_ms: (ms) => void Atomics.wait(ctrl, 3, Atomics.load(ctrl, 3), ms),
     capture(p, w, h) {
       if (w !== 320 || h !== 240) return 0;
+      Atomics.add(ctrl, 4, 1);
       if (Atomics.load(ctrl, 2) === lastSeq) Atomics.wait(ctrl, 2, lastSeq, 500);
       const seq = Atomics.load(ctrl, 2);
       if (seq === lastSeq) return 0;

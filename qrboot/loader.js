@@ -3,7 +3,7 @@
 import { qrReader } from "./qr.mjs";
 
 const $ = (id) => document.getElementById(id);
-const VERSION = "v4";
+const VERSION = "v5";
 // A failure while loading would otherwise leave buttons that do nothing
 const fail = (e) => (($("iso").className = "bad"), ($("iso").textContent = `${VERSION} error: ${e?.message ?? e}`));
 addEventListener("error", (ev) => fail(ev.error ?? ev.message));
@@ -174,7 +174,7 @@ $("run").onclick = async () => {
   const ctrl = new Int32Array(ctrlSab), frame = new Uint8Array(frameSab), screen = new Uint16Array(screenSab);
   const sctx = $("screen").getContext("2d"), img = sctx.createImageData(240, 240);
   const worker = new Worker("worker.js", { type: "module" });
-  running = { ctrl, frame, queue: [] };
+  running = { ctrl, frame, queue: [], calls: 0, lastCall: 0, starting: false };
   $("boot").hidden = true, $("device").hidden = false;
 
   worker.onmessage = ({ data }) => {
@@ -194,11 +194,6 @@ $("run").onclick = async () => {
   };
   worker.postMessage({ wasm: app, ctrlSab, frameSab, screenSab });
 
-  try {
-    await startCamera($("video"));
-  } catch {
-    alertLine("no camera: use 'Show images to the camera'\n");
-  }
   setInterval(pushFrame, 100);
 };
 
@@ -215,8 +210,17 @@ function press(key) {
 }
 
 // Queued images play as camera frames, each held for a few frames; otherwise the live camera
+// The camera runs only while the app is capturing (it counts its calls in ctrl[4]); the app draws the preview
 function pushFrame() {
-  const { ctrl, frame, queue } = running, v = $("video");
+  const { ctrl, frame, queue } = running, v = $("video"), now = performance.now(), calls = Atomics.load(ctrl, 4);
+  if (calls !== running.calls) (running.calls = calls), (running.lastCall = now);
+  const wanted = now - running.lastCall < 1500;
+  if (wanted && !stream && !running.starting && !running.noCamera) {
+    running.starting = true;
+    startCamera(v)
+      .catch(() => ((running.noCamera = true), alertLine("no camera: use 'Show images to the camera'")))
+      .finally(() => (running.starting = false));
+  } else if (!wanted && stream) stopCamera();
   let px = null;
   if (queue.length) {
     const q = queue[0];

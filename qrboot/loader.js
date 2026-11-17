@@ -1,0 +1,206 @@
+// The loader in a browser: reads the app's BBQr codes from the camera or from images, shows its SHA-256,
+// and on approval runs it in worker.js. The screen, keys and camera frames cross over in shared memory
+import { qrReader } from "./qr.mjs";
+
+const $ = (id) => document.getElementById(id);
+
+// Isolation comes from sw.js on hosts that cannot send headers. The first visit reloads once it is in control
+if ("serviceWorker" in navigator) {
+  await navigator.serviceWorker.register("sw.js");
+  if (!crossOriginIsolated && !sessionStorage.getItem("qrboot-reloaded")) {
+    sessionStorage.setItem("qrboot-reloaded", "1");
+    await navigator.serviceWorker.ready;
+    location.reload();
+    await new Promise(() => {});
+  }
+}
+const B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const qr = await qrReader("qr_reader.wasm");
+const canvas = document.createElement("canvas"), ctx2d = canvas.getContext("2d", { willReadFrequently: true });
+let parts = new Map(), total = 0, app = null, stream = null, running = null;
+
+$("iso").textContent = crossOriginIsolated
+  ? "Offline once loaded: nothing here talks to the network."
+  : "This browser could not isolate the page, which the app's worker needs. Reload, or serve it with tools/qrboot/serve.py.";
+
+// Greyscale pixels of a drawable, scaled to fit w x h (keeping its shape) and centred on white
+function grey(src, sw, sh, w, h, fit = 1) {
+  canvas.width = w, canvas.height = h;
+  ctx2d.fillStyle = "#fff", ctx2d.fillRect(0, 0, w, h);
+  const s = Math.min(w / sw, h / sh) * fit, dw = sw * s, dh = sh * s;
+  ctx2d.drawImage(src, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  const rgba = ctx2d.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
+  for (let i = 0; i < out.length; i++) out[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8;
+  return out;
+}
+
+function largest(sw, sh) {
+  const s = Math.min(1, 1280 / Math.max(sw, sh), 720 / Math.min(sw, sh));
+  return [Math.round(sw * s), Math.round(sh * s)];
+}
+
+// --- boot: collect the codes ---
+function drawGrid() {
+  $("grid").replaceChildren(...Array.from({ length: total }, (_, i) => {
+    const s = document.createElement("span");
+    s.textContent = i + 1;
+    if (parts.has(i)) s.className = "got";
+    return s;
+  }));
+}
+
+function takePart(text) {
+  if (!text.startsWith("B$ZB")) return "not an app code";
+  const t = B36.indexOf(text[4]) * 36 + B36.indexOf(text[5]), i = B36.indexOf(text[6]) * 36 + B36.indexOf(text[7]);
+  if (total && t !== total) return "a code from another set";
+  if (!total) total = t;
+  if (!parts.has(i)) parts.set(i, text.slice(8)), drawGrid();
+  $("bootStatus").textContent = `${parts.size} of ${total} codes read`;
+  if (parts.size === total && !app) assemble();
+  return null;
+}
+
+async function assemble() {
+  const text = Array.from({ length: total }, (_, i) => parts.get(i)).join("");
+  const packed = new Uint8Array(Math.floor((text.length * 5) / 8));
+  for (let i = 0, acc = 0, bits = 0, o = 0; i < text.length; i++) {
+    acc = ((acc << 5) | B32.indexOf(text[i])) & 0xffff;
+    if ((bits += 5) >= 8) packed[o++] = (acc >> (bits -= 8)) & 255;
+  }
+  try {
+    // BBQr's zlib is raw deflate; any raw inflater reads its 1 KiB window
+    const wasm = new Uint8Array(await new Response(new Blob([packed]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    const hex = [...new Uint8Array(await crypto.subtle.digest("SHA-256", wasm))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    app = wasm;
+    $("hash").textContent = hex.match(/.{4}/g).join(" ");
+    $("verify").hidden = false;
+    $("bootStatus").textContent = `All ${total} codes read: ${wasm.length} bytes`;
+    stopCamera();
+  } catch (err) {
+    $("bootStatus").innerHTML = `<span class="bad">The codes did not decompress: ${err.message}</span>`;
+  }
+}
+
+$("bootFiles").onchange = async (ev) => {
+  for (const f of ev.target.files) {
+    const bmp = await createImageBitmap(f), [w, h] = largest(bmp.width, bmp.height);
+    const r = qr.decode(grey(bmp, bmp.width, bmp.height, w, h), w, h);
+    const why = typeof r === "number" ? `no code in ${f.name}` : takePart(new TextDecoder("latin1").decode(r));
+    if (why) $("bootStatus").textContent = why;
+  }
+  ev.target.value = "";
+};
+
+// --- camera ---
+async function startCamera() {
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
+  $("video").srcObject = stream;
+  await $("video").play();
+}
+
+function stopCamera() {
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+}
+
+$("cam").onclick = async () => {
+  try {
+    await startCamera();
+  } catch (err) {
+    $("bootStatus").textContent = `Camera unavailable: ${err.message}. Read code images instead.`;
+    return;
+  }
+  const v = $("video");
+  (function scan() {
+    if (!stream || app) return;
+    if (v.videoWidth) {
+      const [w, h] = largest(v.videoWidth, v.videoHeight), r = qr.decode(grey(v, v.videoWidth, v.videoHeight, w, h), w, h);
+      if (typeof r !== "number") takePart(new TextDecoder("latin1").decode(r));
+    }
+    setTimeout(scan, 100);
+  })();
+};
+
+$("discard").onclick = () => {
+  parts = new Map(), total = 0, app = null;
+  $("verify").hidden = true, drawGrid();
+  $("bootStatus").textContent = "Show the printed app codes to the camera, in any order.";
+};
+
+// --- run ---
+$("run").onclick = async () => {
+  if (!crossOriginIsolated) return alertLine("needs cross-origin isolation (serve.py)");
+  const ctrlSab = new SharedArrayBuffer(24 * 4), frameSab = new SharedArrayBuffer(320 * 240), screenSab = new SharedArrayBuffer(240 * 480);
+  const ctrl = new Int32Array(ctrlSab), frame = new Uint8Array(frameSab), screen = new Uint16Array(screenSab);
+  const sctx = $("screen").getContext("2d"), img = sctx.createImageData(240, 240);
+  const worker = new Worker("worker.js", { type: "module" });
+  running = { ctrl, frame, queue: [] };
+  $("boot").hidden = true, $("device").hidden = false;
+
+  worker.onmessage = ({ data }) => {
+    if (data.present) {
+      for (let i = 0; i < 240 * 240; i++) {
+        const c = screen[i];
+        img.data.set([((c >> 11) * 255) / 31, (((c >> 5) & 63) * 255) / 63, ((c & 31) * 255) / 31, 255], i * 4);
+      }
+      sctx.putImageData(img, 0, 0);
+    } else if (data.log) {
+      const log = $("log");
+      log.textContent += data.log;
+      log.scrollTop = log.scrollHeight;
+    } else if (data.stopped) {
+      alertLine(`app stopped: ${data.stopped}`);
+    }
+  };
+  worker.postMessage({ wasm: app, ctrlSab, frameSab, screenSab });
+
+  try {
+    await startCamera();
+  } catch {
+    alertLine("no camera: use 'Show images to the camera'\n");
+  }
+  setInterval(pushFrame, 100);
+};
+
+function alertLine(text) {
+  $("log").textContent += text + "\n";
+}
+
+function press(key) {
+  if (!running) return;
+  const { ctrl } = running, head = Atomics.load(ctrl, 0);
+  Atomics.store(ctrl, 8 + (head % 16), key);
+  Atomics.store(ctrl, 0, head + 1);
+  Atomics.add(ctrl, 3, 1), Atomics.notify(ctrl, 3);
+}
+
+// Queued images play as camera frames, each held for a few frames; otherwise the live camera
+function pushFrame() {
+  const { ctrl, frame, queue } = running, v = $("video");
+  let px = null;
+  if (queue.length) {
+    const q = queue[0];
+    px = q.px;
+    if (--q.left <= 0) queue.shift();
+  } else if (stream && v.videoWidth) {
+    px = grey(v, v.videoWidth, v.videoHeight, 320, 240);
+  }
+  if (!px) return;
+  frame.set(px);
+  Atomics.add(ctrl, 2, 1), Atomics.notify(ctrl, 2);
+}
+
+$("feedFiles").onchange = async (ev) => {
+  for (const f of ev.target.files) {
+    const bmp = await createImageBitmap(f);
+    running?.queue.push({ px: grey(bmp, bmp.width, bmp.height, 320, 240, 0.9), left: 3 });
+  }
+  ev.target.value = "";
+};
+
+document.querySelectorAll("[data-key]").forEach((b) => (b.onclick = () => press(+b.dataset.key)));
+const KEYS = { ArrowUp: 0, ArrowDown: 1, ArrowLeft: 2, ArrowRight: 3, Enter: 4, Escape: 5 };
+addEventListener("keydown", (ev) => {
+  if (running && ev.key in KEYS) press(KEYS[ev.key]), ev.preventDefault();
+});
+drawGrid();

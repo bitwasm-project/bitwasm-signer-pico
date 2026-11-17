@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qrboot loader</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#11161a">
+<style>
+  :root { --bg: #11161a; --panel: #1b2228; --line: #2e3a43; --fg: #e6edf2; --muted: #93a2ad; --accent: #f0a23a; --ok: #4cc2a4; --bad: #e5675c; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 ui-monospace, Menlo, monospace; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px; }
+  h1 { font-size: 18px; margin: 0; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  button, label.file { background: #26313a; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); color: #1b1206; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .4; cursor: default; }
+  label.file input { display: none; }
+  .muted { color: var(--muted); }
+  .hash { font-size: 16px; letter-spacing: .04em; color: var(--accent); word-break: break-word; }
+  .bad { color: var(--bad); } .ok { color: var(--ok); }
+  #grid { display: flex; flex-wrap: wrap; gap: 4px; }
+  #grid span { width: 22px; height: 22px; border-radius: 4px; background: #26313a; font-size: 10px; display: grid; place-items: center; color: var(--muted); }
+  #grid span.got { background: var(--ok); color: #06231c; }
+  .device { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
+  canvas#screen { width: 360px; max-width: 100%; aspect-ratio: 1; image-rendering: pixelated; background: #000; border-radius: 8px; }
+  .keys { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; }
+  .keys button { padding: 10px 0; }
+  video { width: 240px; max-width: 100%; border-radius: 6px; background: #000; }
+  pre#log { margin: 0; max-height: 280px; overflow: auto; background: #0c1013; border-radius: 6px; padding: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  @media (max-width: 720px) { .device { grid-template-columns: 1fr; } }
+</style>
+<main>
+  <h1>qrboot loader</h1>
+  <p class="muted" id="iso"></p>
+
+  <section id="boot">
+    <div class="row">
+      <button id="cam" class="primary">Start camera</button>
+      <label class="file">Read code images<input id="bootFiles" type="file" accept="image/*" multiple></label>
+      <span class="muted" id="bootStatus">Show the printed app codes to the camera, in any order.</span>
+    </div>
+    <div id="grid"></div>
+    <div id="verify" hidden>
+      <p>SHA-256 of the app read from the codes. Run it only if this matches the one printed with them.</p>
+      <p class="hash" id="hash"></p>
+      <div class="row"><button id="run" class="primary">It matches: run the app</button><button id="discard">Discard</button></div>
+    </div>
+  </section>
+
+  <section id="device" hidden>
+    <div class="device">
+      <div class="row" style="flex-direction:column;align-items:flex-start">
+        <canvas id="screen" width="240" height="240"></canvas>
+        <div class="keys">
+          <span></span><button data-key="0">Up</button><span></span>
+          <button data-key="2">Left</button><button data-key="4">OK</button><button data-key="3">Right</button>
+          <button data-key="5">A</button><button data-key="1">Down</button><button data-key="6">B</button>
+        </div>
+        <p class="muted">Keys: arrows, Enter = OK, Esc = A (back)</p>
+      </div>
+      <div style="display:grid;gap:12px;min-width:0">
+        <div class="row">
+          <video id="video" playsinline muted></video>
+          <label class="file">Show images to the camera<input id="feedFiles" type="file" accept="image/*" multiple></label>
+        </div>
+        <pre id="log"></pre>
+      </div>
+    </div>
+  </section>
+</main>
+<script type="module" src="loader.js"></script>
+</html>

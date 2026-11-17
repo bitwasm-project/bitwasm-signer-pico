@@ -3,7 +3,7 @@
 QRBOOT_TEST_SEED ?= 0
 QRBOOT_SRC := src/main.c src/ui/ui.c $(QRGEN)/qrcodegen.c $(CORE_SRC) components/parts/signer/secp256k1_unity.c \
   components/parts/parser/c/src/psbt.c components/parts/parser/c/src/ur.c \
-  src/qrboot/hal.c src/qrboot/qr_reader.c src/qrboot/parser_direct.c
+  src/qrboot/hal.c src/qrboot/qr_reader.c src/qrboot/parser_direct.c src/qrboot/libc_min.c
 
 build/qrboot/app.wasm: $(QRBOOT_SRC) src/qrboot/qrboot.h build/font8x16.h build/test_psbt.h
 	mkdir -p build/qrboot

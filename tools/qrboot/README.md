@@ -17,8 +17,8 @@ refuses codes whose SHA-256 differs from the one printed with them.
 
 | | |
 |---|---|
-| app.wasm | 138,712 bytes, 70,584 compressed |
-| codes at version 40 / 25 / 15 | 27 / 62 / 152 |
+| app.wasm | 116,237 bytes, 60,368 compressed |
+| codes at version 40 / animated frames at version 20 | 23 / 78 |
 
 `make qrboot-release` writes what is committed in `release/qrboot`: `app.wasm` without the test seed,
 its `sheet.html` (the codes inline, so one file) and `anim.html`, and the hash in `SHA256.txt`.
@@ -37,7 +37,7 @@ will do; `tools/qrboot/serve.py` serves it locally.
 stays on its SeedQR plate, which the app asks for.
 
 `anim.html` is the same app as an animated QR for a screen, its frames at `--anim-version` (20 by
-default, 92 frames) so a phone reads each at a glance.
+default) so a phone reads each at a glance.
 
-The app links wasi-libc's `vsnprintf`, which names `fd_write` and `fd_seek`; the loader provides them as
-stubs that are never called.
+The app imports only `qrboot`: `src/qrboot/libc_min.c` supplies the `snprintf` and `malloc` it needs in
+place of wasi-libc's, whose stdio would name WASI's `fd_write` and `fd_seek`.

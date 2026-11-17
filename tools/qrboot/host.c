@@ -313,12 +313,6 @@ static uint8_t *boot_from_codes(const char *expected, char **paths, int n, size_
     return wasm;
 }
 
-/* wasi-libc's vsnprintf links its stdio, which names these; nothing in the app calls them */
-static int32_t wasi_stub(wasm_exec_env_t env, int32_t a, int64_t b, int32_t c, int32_t d) {
-    (void)env, (void)a, (void)b, (void)c, (void)d;
-    return 52; /* ENOSYS */
-}
-
 int main(int argc, char **argv) {
     static NativeSymbol qrboot[] = {
         {"draw_line", qb_draw_line, "(ii)", NULL}, {"key", qb_key, "()i", NULL},
@@ -326,7 +320,6 @@ int main(int argc, char **argv) {
         {"capture", qb_capture, "(iii)i", NULL},   {"qr_decode", qb_qr_decode, "(iiiiii)i", NULL},
         {"random", qb_random, "(ii)", NULL},       {"log", qb_log, "(ii)", NULL},
     };
-    static NativeSymbol wasi[] = {{"fd_write", wasi_stub, "(iiii)i", NULL}, {"fd_seek", wasi_stub, "(iIii)i", NULL}};
     char err[256], line[65536];
     RuntimeInitArgs init;
     FILE *f;
@@ -361,8 +354,7 @@ int main(int argc, char **argv) {
     memset(&init, 0, sizeof(init));
     init.mem_alloc_type = Alloc_With_System_Allocator;
     if (!wasm_runtime_full_init(&init) ||
-        !wasm_runtime_register_natives("qrboot", qrboot, sizeof(qrboot) / sizeof(qrboot[0])) ||
-        !wasm_runtime_register_natives("wasi_snapshot_preview1", wasi, 2))
+        !wasm_runtime_register_natives("qrboot", qrboot, sizeof(qrboot) / sizeof(qrboot[0])))
         fail("WAMR init failed", NULL);
     wasm_module_t mod = wasm_runtime_load(wasm, (uint32_t)size, err, sizeof(err));
     if (!mod) fail("load:", err);

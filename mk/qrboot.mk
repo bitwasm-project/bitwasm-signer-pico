@@ -1,6 +1,6 @@
 # The firmware's main.c and UI as one wasm app a QR boot loader runs (src/qrboot). The parser is linked
 # in, and the board comes from the loader's imports
-QRBOOT_TEST_SEED ?= 1
+QRBOOT_TEST_SEED ?= 0
 QRBOOT_SRC := src/main.c src/ui/ui.c $(QRGEN)/qrcodegen.c $(CORE_SRC) components/parts/signer/secp256k1_unity.c \
   components/parts/parser/c/src/psbt.c components/parts/parser/c/src/ur.c \
   src/qrboot/hal.c src/qrboot/qr_reader.c src/qrboot/parser_direct.c
@@ -43,8 +43,17 @@ $(QRBOOT_WEB_QR): src/runtime/qr_reader/src/lib.rs src/runtime/qr_reader/Cargo.l
 qrboot-web: build/qrboot/app.wasm $(QRBOOT_WEB_QR) $(wildcard tools/qrboot/web/*) build/psbt/own_mixed_nwu.ur
 	mkdir -p $(QRBOOT_WEB)
 	cp tools/qrboot/web/* $(QRBOOT_WEB)/ && cp $(QRBOOT_WEB_QR) $(QRBOOT_WEB)/qr_reader.wasm
-	python3 tools/qrboot/codes.py pack build/qrboot/app.wasm $(QRBOOT_WEB)/codes
+	python3 tools/qrboot/codes.py pack build/qrboot/app.wasm $(QRBOOT_WEB)/codes --pngs
 	echo 000000000000000000000000000000000000000000000003 > build/qrboot/seed.txt
 	python3 tools/qrboot/codes.py text build/qrboot/seed.txt $(QRBOOT_WEB)/test/seedqr
 	python3 tools/qrboot/codes.py text build/psbt/own_mixed_nwu.ur $(QRBOOT_WEB)/test/psbt
 .PHONY: qrboot-web
+
+# What is committed: the app without the test seed, and its sheet and animated QR. The make variable
+# alone would not rebuild app.wasm, so it is removed first
+qrboot-release:
+	rm -f build/qrboot/app.wasm
+	$(MAKE) build/qrboot/app.wasm QRBOOT_TEST_SEED=0
+	mkdir -p release/qrboot && cp build/qrboot/app.wasm release/qrboot/app.wasm
+	python3 tools/qrboot/codes.py pack release/qrboot/app.wasm release/qrboot | tee release/qrboot/SHA256.txt
+.PHONY: qrboot-release

@@ -7,7 +7,7 @@ in. The loader holds no Bitcoin code.
 
 ```sh
 make build/qrboot/app.wasm build/qrboot/host/host
-python3 tools/qrboot/codes.py pack build/qrboot/app.wasm out --version 40   # printable codes + sheet.html
+python3 tools/qrboot/codes.py pack build/qrboot/app.wasm out --pngs        # sheet.html, anim.html, qr-NN.png
 build/qrboot/host/host script.txt shot.png --qr "<sha256>" out/qr-*.png      # boot from the codes
 ```
 
@@ -19,6 +19,9 @@ refuses codes whose SHA-256 differs from the one printed with them.
 |---|---|
 | app.wasm | 138,712 bytes, 70,584 compressed |
 | codes at version 40 / 25 / 15 | 27 / 62 / 152 |
+
+`make qrboot-release` writes what is committed in `release/qrboot`: `app.wasm` without the test seed,
+its `sheet.html` (the codes inline, so one file) and `anim.html`, and the hash in `SHA256.txt`.
 
 ## In a browser
 

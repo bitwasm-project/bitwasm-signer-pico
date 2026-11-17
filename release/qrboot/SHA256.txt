@@ -1,0 +1,3 @@
+app      137582 bytes, 69971 compressed
+codes    27 at version 40, 91 animated at version 20
+sha256   743a 3cff 487c 6e46 f1cd 7058 fda3 b38a f5f6 6ade 37da 8bfe c579 109b 538c 1153

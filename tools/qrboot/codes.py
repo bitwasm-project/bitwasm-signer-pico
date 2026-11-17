@@ -4,7 +4,7 @@
   python3 tools/qrboot/codes.py text lines.txt outdir                 one code per line (test frames)
 
 pack prints the SHA-256 the loader shows before it runs the app, and writes sheet.html: an A4 sheet for
-an heir, with the steps, the hash and the codes. It holds no secret; the key stays on its SeedQR plate.
+an heir, with the steps, the hash and the codes inline. It holds no secret; the key stays on its SeedQR plate.
 It also writes anim.html, the same app as an animated QR to show on a screen (--anim-version).
 """
 import argparse
@@ -22,7 +22,7 @@ B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 SCALE, BORDER = 3, 4
 
 
-def png(qr, path):
+def png(qr):
     size = (qr.get_size() + 2 * BORDER) * SCALE
     rows = bytearray()
     for y in range(size):
@@ -30,7 +30,7 @@ def png(qr, path):
         rows += bytes(0 if qr.get_module(x // SCALE - BORDER, y // SCALE - BORDER) else 255 for x in range(size))
     chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
     ihdr = struct.pack(">IIBBBBB", size, size, 8, 0, 0, 0, 0)
-    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b""))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b"")
 
 
 def capacity(version):
@@ -59,11 +59,12 @@ def pack(a):
     text = base64.b32encode(c.compress(wasm) + c.flush()).decode().rstrip("=")
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
-    printed = codes(text, a.version)
-    for i, qr in enumerate(printed):
-        png(qr, out / f"qr-{i:02d}.png")
+    printed = [png(qr) for qr in codes(text, a.version)]
+    if a.pngs:
+        for i, p in enumerate(printed):
+            (out / f"qr-{i:02d}.png").write_bytes(p)
     groups = " ".join(digest[i : i + 4] for i in range(0, 64, 4))
-    (out / "sheet.html").write_text(sheet(a, len(wasm), len(printed), groups))
+    (out / "sheet.html").write_text(sheet(a, len(wasm), printed, groups))
     shown = codes(text, a.anim_version)
     (out / "anim.html").write_text(anim(a, shown, groups))
     print(f"app      {len(wasm)} bytes, {len(text) * 5 // 8} compressed")
@@ -162,12 +163,12 @@ draw(), play();
 """
 
 
-def sheet(a, size, n, groups):
-    t = TEXT[a.lang]
+def sheet(a, size, pngs, groups):
+    t, n = TEXT[a.lang], len(pngs)
     mm = (a.version * 4 + 17 + 2 * BORDER) * a.module  # one code's printed width
     steps = "".join(f"<li>{s}</li>" for s in t["steps"])
     fields = "".join(f"<div class=field><span>{f}</span></div>" for f in t["fields"])
-    figs = "".join(f'<figure><img src="qr-{i:02d}.png"><figcaption>{i + 1} / {n}</figcaption></figure>' for i in range(n))
+    figs = "".join(f'<figure><img src="data:image/png;base64,{base64.b64encode(p).decode()}"><figcaption>{i + 1} / {n}</figcaption></figure>' for i, p in enumerate(pngs))
     return f"""<!doctype html><html lang="{a.lang}"><meta charset="utf-8"><title>{t["title"]}</title>
 <style>
 @page {{ size: A4; margin: 8mm }}
@@ -207,7 +208,7 @@ def text(a):
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
     for i, line in enumerate(Path(a.input).read_text().split()):
-        png(QrCode.encode_segments(QrSegment.make_segments(line), QrCode.Ecc.LOW, boostecl=False), out / f"{i:02d}.png")
+        (out / f"{i:02d}.png").write_bytes(png(QrCode.encode_segments(QrSegment.make_segments(line), QrCode.Ecc.LOW, boostecl=False)))
 
 
 ap = argparse.ArgumentParser()
@@ -216,7 +217,8 @@ ap.add_argument("input")
 ap.add_argument("outdir")
 ap.add_argument("--version", type=int, default=40)
 ap.add_argument("--anim-version", type=int, default=20, help="version of anim.html's frames")
-ap.add_argument("--lang", choices=sorted(TEXT), default="ja")
+ap.add_argument("--lang", choices=sorted(TEXT), default="en")
+ap.add_argument("--pngs", action="store_true", help="also write each code as qr-NN.png")
 ap.add_argument("--module", type=float, default=0.32, help="printed module size in mm")
 ap.add_argument("--loader-url", default="https://bitwasm-project.github.io/bitwasm-signer-pico/qrboot/")
 args = ap.parse_args()

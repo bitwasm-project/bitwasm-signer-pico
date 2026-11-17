@@ -3,14 +3,17 @@
 import { qrReader } from "./qr.mjs";
 
 const $ = (id) => document.getElementById(id);
-const VERSION = "v5";
+const VERSION = "v6";
 // A failure while loading would otherwise leave buttons that do nothing
 const fail = (e) => (($("iso").className = "bad"), ($("iso").textContent = `${VERSION} error: ${e?.message ?? e}`));
 addEventListener("error", (ev) => fail(ev.error ?? ev.message));
 addEventListener("unhandledrejection", (ev) => fail(ev.reason));
 
 // Isolation comes from sw.js on hosts that cannot send headers. The first visit reloads once it is in control
+// A new version installs behind the open page; take it at once unless the app is already running
 if ("serviceWorker" in navigator) {
+  const updating = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => updating && $("device").hidden && location.reload());
   await navigator.serviceWorker.register("sw.js");
   if (!crossOriginIsolated && !sessionStorage.getItem("qrboot-reloaded")) {
     sessionStorage.setItem("qrboot-reloaded", "1");

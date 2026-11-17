@@ -17,7 +17,7 @@ if ("serviceWorker" in navigator) {
 const B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const qr = await qrReader("qr_reader.wasm");
 const canvas = document.createElement("canvas"), ctx2d = canvas.getContext("2d", { willReadFrequently: true });
-let parts = new Map(), total = 0, app = null, stream = null, running = null;
+let parts = new Map(), total = 0, app = null, stream = null, running = null, last = -1;
 
 $("iso").textContent = crossOriginIsolated
   ? "Offline once loaded: nothing here talks to the network."
@@ -44,9 +44,11 @@ function drawGrid() {
   $("grid").replaceChildren(...Array.from({ length: total }, (_, i) => {
     const s = document.createElement("span");
     s.textContent = i + 1;
-    if (parts.has(i)) s.className = "got";
+    if (parts.has(i)) s.className = i === last ? "got new" : "got";
     return s;
   }));
+  $("count").textContent = total ? `${parts.size} / ${total}` : "0";
+  $("bar").style.width = total ? `${(100 * parts.size) / total}%` : "0";
 }
 
 function takePart(text) {
@@ -54,8 +56,9 @@ function takePart(text) {
   const t = B36.indexOf(text[4]) * 36 + B36.indexOf(text[5]), i = B36.indexOf(text[6]) * 36 + B36.indexOf(text[7]);
   if (total && t !== total) return "a code from another set";
   if (!total) total = t;
-  if (!parts.has(i)) parts.set(i, text.slice(8)), drawGrid();
-  $("bootStatus").textContent = `${parts.size} of ${total} codes read`;
+  const fresh = !parts.has(i);
+  if (fresh) parts.set(i, text.slice(8)), last = i, drawGrid(), navigator.vibrate?.(60);
+  scanState(fresh ? "got" : "seen", fresh ? `Read code ${i + 1}` : `Code ${i + 1} was already read`);
   if (parts.size === total && !app) assemble();
   return null;
 }
@@ -72,10 +75,11 @@ async function assemble() {
     const wasm = new Uint8Array(await new Response(new Blob([packed]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
     const hex = [...new Uint8Array(await crypto.subtle.digest("SHA-256", wasm))].map((b) => b.toString(16).padStart(2, "0")).join("");
     app = wasm;
-    $("hash").textContent = hex.match(/.{4}/g).join(" ");
-    $("verify").hidden = false;
-    $("bootStatus").textContent = `All ${total} codes read: ${wasm.length} bytes`;
-    stopCamera();
+    $("hash").replaceChildren(...hex.match(/.{4}/g).map((g) => Object.assign(document.createElement("span"), { textContent: g })));
+    $("verify").hidden = $("verifyActions").hidden = false;
+    $("scanActions").hidden = $("grid").hidden = true;
+    $("bootStatus").textContent = `codes read: ${wasm.length} bytes`;
+    stopCamera(), ($("idle").hidden = true);
   } catch (err) {
     $("bootStatus").innerHTML = `<span class="bad">The codes did not decompress: ${err.message}</span>`;
   }
@@ -87,6 +91,7 @@ $("bootFiles").onchange = async (ev) => {
     const r = qr.decode(grey(bmp, bmp.width, bmp.height, w, h), w, h);
     const why = typeof r === "number" ? `no code in ${f.name}` : takePart(new TextDecoder("latin1").decode(r));
     if (why) $("bootStatus").textContent = why;
+    else $("bootStatus").textContent = "codes read";
   }
   ev.target.value = "";
 };
@@ -94,13 +99,12 @@ $("bootFiles").onchange = async (ev) => {
 // --- camera ---
 async function startCamera() {
   stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
-  $("video").srcObject = stream;
-  await $("video").play();
+  for (const v of [$("video"), $("bootVideo")]) (v.srcObject = stream), await v.play();
 }
 
 function stopCamera() {
   stream?.getTracks().forEach((t) => t.stop());
-  stream = null;
+  stream = null, $("scanBox").hidden = true, $("idle").hidden = false;
 }
 
 $("cam").onclick = async () => {
@@ -110,21 +114,37 @@ $("cam").onclick = async () => {
     $("bootStatus").textContent = `Camera unavailable: ${err.message}. Read code images instead.`;
     return;
   }
-  const v = $("video");
+  const v = $("bootVideo");
+  $("scanBox").hidden = false, $("idle").hidden = true, $("cam").hidden = true;
   (function scan() {
     if (!stream || app) return;
     if (v.videoWidth) {
-      const [w, h] = largest(v.videoWidth, v.videoHeight), r = qr.decode(grey(v, v.videoWidth, v.videoHeight, w, h), w, h);
-      if (typeof r !== "number") takePart(new TextDecoder("latin1").decode(r));
+      const t = performance.now(), [w, h] = largest(v.videoWidth, v.videoHeight), r = qr.decode(grey(v, v.videoWidth, v.videoHeight, w, h), w, h);
+      const ms = Math.round(performance.now() - t);
+      if (typeof r !== "number") {
+        const why = takePart(new TextDecoder("latin1").decode(r));
+        if (why) scanState("seen", why);
+      } else if (r === -1) scanState("seen", `A code is in view but did not read (${ms} ms): fill the frame, hold still, check focus`);
+      else scanState("", `No code in view (${w}x${h}, ${ms} ms)`);
     }
     setTimeout(scan, 100);
   })();
 };
 
+// The border flashes for a read; a plain state does not clear a flash before it has been seen
+let flashUntil = 0;
+function scanState(cls, text) {
+  const now = performance.now();
+  if (!cls && now < flashUntil) return;
+  if (cls) flashUntil = now + 600;
+  $("bootVideo").className = cls, $("scanState").textContent = text;
+}
+
 $("discard").onclick = () => {
-  parts = new Map(), total = 0, app = null;
-  $("verify").hidden = true, drawGrid();
-  $("bootStatus").textContent = "Show the printed app codes to the camera, in any order.";
+  parts = new Map(), total = 0, app = null, last = -1;
+  $("verify").hidden = $("verifyActions").hidden = true;
+  $("scanActions").hidden = $("grid").hidden = $("cam").hidden = $("idle").hidden = false;
+  $("bootStatus").textContent = "codes read", drawGrid();
 };
 
 // --- run ---

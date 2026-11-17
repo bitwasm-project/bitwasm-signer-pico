@@ -1,6 +1,6 @@
 // Keeps the loader working offline and gives it the cross-origin isolation its shared memory needs, which
 // static hosts such as GitHub Pages cannot set as headers: every response passes through here with them added
-const CACHE = "qrboot-v5";
+const CACHE = "qrboot-v6";
 const FILES = ["./", "index.html", "loader.js", "worker.js", "qr.mjs", "qr_reader.wasm", "manifest.json"];
 
 // A new CACHE name replaces the files: fetched past the HTTP cache, and older caches dropped so none shadows them

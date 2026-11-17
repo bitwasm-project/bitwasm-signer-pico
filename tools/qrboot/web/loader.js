@@ -3,7 +3,7 @@
 import { qrReader } from "./qr.mjs";
 
 const $ = (id) => document.getElementById(id);
-const VERSION = "v3";
+const VERSION = "v4";
 // A failure while loading would otherwise leave buttons that do nothing
 const fail = (e) => (($("iso").className = "bad"), ($("iso").textContent = `${VERSION} error: ${e?.message ?? e}`));
 addEventListener("error", (ev) => fail(ev.error ?? ev.message));
@@ -30,11 +30,11 @@ $("iso").textContent = VERSION + " · " + (crossOriginIsolated
   : "This browser could not isolate the page, which the app's worker needs. Reload, or serve it with tools/qrboot/serve.py.");
 
 // Greyscale pixels of a drawable, scaled to fit w x h (keeping its shape) and centred on white
-function grey(src, sw, sh, w, h, fit = 1) {
+function grey(src, sw, sh, w, h, fit = 1, sx = 0, sy = 0) {
   canvas.width = w, canvas.height = h;
   ctx2d.fillStyle = "#fff", ctx2d.fillRect(0, 0, w, h);
   const s = Math.min(w / sw, h / sh) * fit, dw = sw * s, dh = sh * s;
-  ctx2d.drawImage(src, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  ctx2d.drawImage(src, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh);
   const rgba = ctx2d.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
   for (let i = 0; i < out.length; i++) out[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8;
   return out;
@@ -106,7 +106,7 @@ $("bootFiles").onchange = async (ev) => {
 // One element at a time: iOS may stall play() on a second element, or on a hidden one
 async function startCamera(v) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error("this browser gives pages no camera");
-  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 3840 }, height: { ideal: 2160 } } });
   v.srcObject = stream;
   v.play().catch((e) => fail(e));
 }
@@ -130,13 +130,22 @@ $("cam").onclick = async () => {
   (function scan() {
     if (!stream || app) return;
     if (v.videoWidth) {
-      const t = performance.now(), [w, h] = largest(v.videoWidth, v.videoHeight), r = qr.decode(grey(v, v.videoWidth, v.videoHeight, w, h), w, h);
+      // Version 40 needs about 3.5 pixels a module, more than a whole frame scaled to 720 gives, so the
+      // centre square is read at up to the camera's own resolution: all of it, and the guide's middle part
+      const vw = v.videoWidth, vh = v.videoHeight, t = performance.now();
+      let r = 0;
+      for (const f of [1, 0.55]) {
+        const side = Math.round(Math.min(vw, vh) * f), n = Math.min(side, 960);
+        const got = qr.decode(grey(v, side, side, n, n, 1, (vw - side) / 2, (vh - side) / 2), n, n);
+        if (typeof got !== "number") { r = got; break; }
+        r = Math.min(r, got);
+      }
       const ms = Math.round(performance.now() - t);
       if (typeof r !== "number") {
         const why = takePart(new TextDecoder("latin1").decode(r));
         if (why) scanState("seen", why);
-      } else if (r === -1) scanState("seen", `A code is in view but did not read (${ms} ms): fill the frame, hold still, check focus`);
-      else scanState("", `No code in view (${w}x${h}, ${ms} ms)`);
+      } else if (r === -1) scanState("seen", `A code is in view but did not read (${ms} ms): fill the inner square, hold still, check focus`);
+      else scanState("", `No code in view (camera ${vw}x${vh}, ${ms} ms)`);
     }
     setTimeout(scan, 100);
   })();

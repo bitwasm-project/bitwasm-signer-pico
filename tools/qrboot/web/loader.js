@@ -3,6 +3,11 @@
 import { qrReader } from "./qr.mjs";
 
 const $ = (id) => document.getElementById(id);
+const VERSION = "v3";
+// A failure while loading would otherwise leave buttons that do nothing
+const fail = (e) => (($("iso").className = "bad"), ($("iso").textContent = `${VERSION} error: ${e?.message ?? e}`));
+addEventListener("error", (ev) => fail(ev.error ?? ev.message));
+addEventListener("unhandledrejection", (ev) => fail(ev.reason));
 
 // Isolation comes from sw.js on hosts that cannot send headers. The first visit reloads once it is in control
 if ("serviceWorker" in navigator) {
@@ -19,9 +24,10 @@ const qr = await qrReader("qr_reader.wasm");
 const canvas = document.createElement("canvas"), ctx2d = canvas.getContext("2d", { willReadFrequently: true });
 let parts = new Map(), total = 0, app = null, stream = null, running = null, last = -1;
 
-$("iso").textContent = crossOriginIsolated
+$("cam").disabled = false, ($("cam").textContent = "Start camera");
+$("iso").textContent = VERSION + " · " + (crossOriginIsolated
   ? "Offline once loaded: nothing here talks to the network."
-  : "This browser could not isolate the page, which the app's worker needs. Reload, or serve it with tools/qrboot/serve.py.";
+  : "This browser could not isolate the page, which the app's worker needs. Reload, or serve it with tools/qrboot/serve.py.");
 
 // Greyscale pixels of a drawable, scaled to fit w x h (keeping its shape) and centred on white
 function grey(src, sw, sh, w, h, fit = 1) {
@@ -97,9 +103,12 @@ $("bootFiles").onchange = async (ev) => {
 };
 
 // --- camera ---
-async function startCamera() {
+// One element at a time: iOS may stall play() on a second element, or on a hidden one
+async function startCamera(v) {
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error("this browser gives pages no camera");
   stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
-  for (const v of [$("video"), $("bootVideo")]) (v.srcObject = stream), await v.play();
+  v.srcObject = stream;
+  v.play().catch((e) => fail(e));
 }
 
 function stopCamera() {
@@ -108,14 +117,16 @@ function stopCamera() {
 }
 
 $("cam").onclick = async () => {
-  try {
-    await startCamera();
-  } catch (err) {
-    $("bootStatus").textContent = `Camera unavailable: ${err.message}. Read code images instead.`;
-    return;
-  }
   const v = $("bootVideo");
   $("scanBox").hidden = false, $("idle").hidden = true, $("cam").hidden = true;
+  $("scanState").textContent = "Starting the camera";
+  try {
+    await startCamera(v);
+  } catch (err) {
+    $("scanBox").hidden = true, $("cam").hidden = false, $("idle").hidden = false;
+    $("idle").innerHTML = `<span class="bad">Camera unavailable: ${err.name} ${err.message}</span>`;
+    return;
+  }
   (function scan() {
     if (!stream || app) return;
     if (v.videoWidth) {
@@ -175,7 +186,7 @@ $("run").onclick = async () => {
   worker.postMessage({ wasm: app, ctrlSab, frameSab, screenSab });
 
   try {
-    await startCamera();
+    await startCamera($("video"));
   } catch {
     alertLine("no camera: use 'Show images to the camera'\n");
   }

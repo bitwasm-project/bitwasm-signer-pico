@@ -20,5 +20,18 @@ refuses codes whose SHA-256 differs from the one printed with them.
 | app.wasm | 138,712 bytes, 70,584 compressed |
 | codes at version 40 / 25 / 15 | 27 / 62 / 152 |
 
+## In a browser
+
+`make qrboot-web` puts the loader in `build/qrboot/web`: it reads the codes from the camera or from
+images, shows the SHA-256, and runs the app in a worker on the browser's WebAssembly. `sw.js` caches it
+for offline use and adds the cross-origin isolation its shared memory needs, so any static HTTPS host
+will do; `tools/qrboot/serve.py` serves it locally.
+
+## The sheet for an heir
+
+`codes.py pack` also writes `sheet.html`, four A4 pages: the steps, the hash to compare and the codes
+(`--lang ja|en`, `--loader-url`, `--module` for the printed module size). It holds no secret. The key
+stays on its SeedQR plate, which the app asks for.
+
 The app links wasi-libc's `vsnprintf`, which names `fd_write` and `fd_seek`; the loader provides them as
 stubs that are never called.

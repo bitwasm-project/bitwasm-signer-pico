@@ -31,3 +31,20 @@ $(QRBOOT_HOST_DIR)/release/libqr_reader.a: src/runtime/qr_reader/src/lib.rs src/
 $(QRBOOT_HOST_DIR)/host: tools/qrboot/host.c $(QRBOOT_HOST_DIR)/wamr/libiwasm.a $(QRBOOT_HOST_DIR)/release/libqr_reader.a
 	cc -O2 -Wall -Wextra -Ithird_party/wasm-micro-runtime/core/iwasm/include -o $@ $< \
 	  $(QRBOOT_HOST_DIR)/wamr/libiwasm.a $(QRBOOT_HOST_DIR)/release/libqr_reader.a -lz -lm -lpthread
+
+# The loader in a browser (tools/qrboot/web), with the app's printable codes and test frames beside it.
+# python3 tools/qrboot/serve.py, then open http://127.0.0.1:8000/
+QRBOOT_WEB := build/qrboot/web
+QRBOOT_WEB_QR := build/qrboot/web-qr/wasm32-unknown-unknown/release/qr_reader.wasm
+$(QRBOOT_WEB_QR): src/runtime/qr_reader/src/lib.rs src/runtime/qr_reader/Cargo.lock
+	cargo rustc --release --locked --no-default-features --manifest-path src/runtime/qr_reader/Cargo.toml \
+	  --target wasm32-unknown-unknown --target-dir build/qrboot/web-qr --crate-type cdylib
+
+qrboot-web: build/qrboot/app.wasm $(QRBOOT_WEB_QR) $(wildcard tools/qrboot/web/*) build/psbt/own_mixed_nwu.ur
+	mkdir -p $(QRBOOT_WEB)
+	cp tools/qrboot/web/* $(QRBOOT_WEB)/ && cp $(QRBOOT_WEB_QR) $(QRBOOT_WEB)/qr_reader.wasm
+	python3 tools/qrboot/codes.py pack build/qrboot/app.wasm $(QRBOOT_WEB)/codes
+	echo 000000000000000000000000000000000000000000000003 > build/qrboot/seed.txt
+	python3 tools/qrboot/codes.py text build/qrboot/seed.txt $(QRBOOT_WEB)/test/seedqr
+	python3 tools/qrboot/codes.py text build/psbt/own_mixed_nwu.ur $(QRBOOT_WEB)/test/psbt
+.PHONY: qrboot-web

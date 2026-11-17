@@ -45,10 +45,8 @@ onmessage = async ({ data: { wasm, ctrlSab, frameSab, screenSab } }) => {
     random: (p, n) => void crypto.getRandomValues(bytes(p, n)),
     log: (p, n) => postMessage({ log: new TextDecoder().decode(bytes(p, n)) }),
   };
-  // wasi-libc's vsnprintf names these; nothing in the app calls them
-  const wasi = { fd_write: () => 52, fd_seek: () => 52 };
   try {
-    const { instance } = await WebAssembly.instantiate(wasm, { qrboot, wasi_snapshot_preview1: wasi });
+    const { instance } = await WebAssembly.instantiate(wasm, { qrboot });
     mem = instance.exports.memory;
     instance.exports.main();
     postMessage({ stopped: "the app returned" });

@@ -3,7 +3,7 @@
 import { qrReader } from "./qr.mjs";
 
 const $ = (id) => document.getElementById(id);
-const VERSION = "v6";
+const VERSION = "v7";
 // A failure while loading would otherwise leave buttons that do nothing
 const fail = (e) => (($("iso").className = "bad"), ($("iso").textContent = `${VERSION} error: ${e?.message ?? e}`));
 addEventListener("error", (ev) => fail(ev.error ?? ev.message));

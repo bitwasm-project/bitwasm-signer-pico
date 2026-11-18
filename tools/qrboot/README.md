@@ -17,7 +17,7 @@ refuses codes whose SHA-256 differs from the one printed with them.
 
 | | |
 |---|---|
-| app.wasm | 116,237 bytes, 60,368 compressed |
+| app.wasm | 116,228 bytes, 60,306 compressed |
 | codes at version 40 / animated frames at version 20 | 23 / 78 |
 
 `make qrboot-release` writes what is committed in `release/qrboot`: `app.wasm` without the test seed,

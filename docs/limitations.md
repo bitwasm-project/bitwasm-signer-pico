@@ -73,7 +73,15 @@ Not reviewed by a third party. signet only. See [Disclaimer](../README.md#discla
 
 ## Hardware
 
-- One board is supported: Raspberry Pi Pico 2 (RP2350, RISC-V Hazard3). No other target is tested.
+- The supported board is Raspberry Pi Pico 2 (RP2350, RISC-V Hazard3). The original Pico (RP2040) builds
+  with `PICO_PLATFORM=rp2040` and is experimental: signing is tested on it, but not yet with its camera.
+- On the RP2040 the parser is compiled into the firmware instead of run as `parser.wasm`, so there is no
+  parser hash to compare with the viewer; the only check is building the firmware yourself.
+- **The RP2040 has no secure boot.** Anyone holding it can flash other firmware through BOOTSEL, and
+  nothing on the device notices. Flash a firmware you built yourself, and flash it again before use.
+- **The RP2040 cannot disable SWD.** The RP2350 can lock debug access in OTP; the RP2040 cannot, so
+  anyone who can touch its SWD pins while it runs can read the seed from RAM. Nothing is stored in flash,
+  so a device taken after power-off holds no key.
 - There is no secure element, no tamper detection, no encrypted storage, and no battery-backed RAM.
 - The boot ROM of the RP2350 is not open source.
 - Builds with `TEST_SEED=1` can select a published test seed. Never put funds on such a build.

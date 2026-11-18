@@ -53,7 +53,7 @@ int main(void) {
     r.seen |= 1u << 4;
     r.screens[4].selection = 2;
     CHECK(ui_review_key(&r, UI_KEY_SELECT) == UI_PENDING, "unseen outputs block approval");
-    CHECK(ui_review_key(&r, UI_KEY_A) == UI_REJECTED, "cancel anywhere");
+    CHECK(ui_review_key(&r, UI_KEY_B) == UI_REJECTED, "cancel anywhere");
 
     /* Even the longest script is shown in full, not truncated: 30 characters over 6 rows */
     ui_review_init(&r, &d);
@@ -100,7 +100,7 @@ int main(void) {
         CHECK(p.cur == 7 * 13, "right wraps within the short last row");
         ui_pass_key(&p, UI_KEY_LEFT);
         CHECK(p.cur == 7 * 13 + 5 && ui_pass_key(&p, UI_KEY_SELECT) == UI_APPROVED, "OK ends the entry");
-        CHECK(ui_pass_key(&p, UI_KEY_A) == UI_REJECTED, "A cancels");
+        CHECK(ui_pass_key(&p, UI_KEY_B) == UI_REJECTED, "B cancels");
         ui_pass_init(&p);
         for (i = 0; i < 97 * 2; i++) ui_pass_key(&p, UI_KEY_DOWN);
         CHECK(p.cur == 0, "down alone visits all 97 keys and comes back");

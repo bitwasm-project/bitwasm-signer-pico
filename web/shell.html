@@ -736,8 +736,8 @@ download.addEventListener('click', () => {
 });
 
 const keymap = {
-  'five-way': { ArrowUp: 0, ArrowDown: 1, ArrowLeft: 2, ArrowRight: 3, Enter: 4, ' ': 4, Escape: 5 },
-  'two-button': { ArrowDown: 1, n: 1, Enter: 4, ' ': 4, Escape: 5 },
+  'five-way': { ArrowUp: 0, ArrowDown: 1, ArrowLeft: 2, ArrowRight: 3, Enter: 4, ' ': 4, Escape: 6 },
+  'two-button': { ArrowDown: 1, n: 1, Enter: 4, ' ': 4, Escape: 6 },
 };
 document.querySelectorAll('[data-layout-choice]').forEach(button =>
   button.addEventListener('click', () => setControlLayout(button.dataset.layoutChoice)));

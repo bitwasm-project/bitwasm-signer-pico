@@ -143,7 +143,7 @@ void ui_review_init(ui_review_t *r, const core_display_t *d) {
 
 int ui_review_key(ui_review_t *r, int key) {
     unsigned int final = r->n - 1, must_see = (1u << final) - 1;
-    if (key == UI_KEY_A) return UI_REJECTED;
+    if (key == UI_KEY_B) return UI_REJECTED;
     if (key == UI_KEY_SELECT) {
         if (r->cur == final) {
             if (r->screens[final].selection == 0) {
@@ -200,7 +200,7 @@ void ui_menu_init(ui_menu_t *m, const char *title, const char *const *items, uns
 
 int ui_menu_key(ui_menu_t *m, int key) {
     if (key == UI_KEY_SELECT || key == UI_KEY_RIGHT) return (int)m->cur;
-    if (key == UI_KEY_A || key == UI_KEY_LEFT) return UI_MENU_BACK;
+    if (key == UI_KEY_B || key == UI_KEY_LEFT) return UI_MENU_BACK;
     if (key == UI_KEY_DOWN) m->cur = (m->cur + 1) % m->n;
     if (key == UI_KEY_UP) m->cur = (m->cur + m->n - 1) % m->n;
     menu_draw(m);
@@ -237,7 +237,7 @@ void ui_pass_init(ui_pass_t *p) {
 
 int ui_pass_key(ui_pass_t *p, int key) {
     unsigned int col = p->cur % PASS_COLS;
-    if (key == UI_KEY_A) return UI_REJECTED;
+    if (key == UI_KEY_B) return UI_REJECTED;
     if (key == UI_KEY_SELECT) {
         if (p->cur == PASS_OK) return UI_APPROVED;
         if (p->cur == PASS_DEL) {

@@ -40,9 +40,11 @@ int vsnprintf(char *buf, size_t cap, const char *f, va_list ap) {
                 neg = x < 0;
                 v = neg ? 0 - (unsigned long long)x : (unsigned long long)x;
             } else {
-                v = lng > 1 ? va_arg(ap, unsigned long long) : lng ? va_arg(ap, unsigned long) : va_arg(ap, unsigned);
+                v = lng > 1 ? va_arg(ap, unsigned long long)
+                    : lng   ? va_arg(ap, unsigned long)
+                            : va_arg(ap, unsigned int);
             }
-            unsigned base = *f == 'x' || *f == 'X' ? 16 : 10;
+            unsigned int base = *f == 'x' || *f == 'X' ? 16 : 10;
             const char *digits = *f == 'X' ? "0123456789ABCDEF" : "0123456789abcdef";
             do *--s = digits[v % base];
             while (v /= base);

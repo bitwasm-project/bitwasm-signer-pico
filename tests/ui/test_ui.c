@@ -77,6 +77,38 @@ int main(void) {
         ui_review_init(&r, &d);
         CHECK(!r.screens[3].text[4][0], "OP_RETURN without an amount says nothing of burning");
     }
+    /* The passphrase keyboard: 95 characters, then DEL and OK, 13 to a row */
+    {
+        ui_pass_t p;
+        int i;
+        ui_pass_init(&p);
+        CHECK(ui_pass_key(&p, UI_KEY_SELECT) == UI_PENDING && !strcmp(p.text, "a"), "types the key under the cursor");
+        ui_pass_key(&p, UI_KEY_DOWN), ui_pass_key(&p, UI_KEY_DOWN), ui_pass_key(&p, UI_KEY_SELECT);
+        CHECK(!strcmp(p.text, "aA"), "two rows down is the capitals");
+        ui_pass_key(&p, UI_KEY_UP), ui_pass_key(&p, UI_KEY_UP), ui_pass_key(&p, UI_KEY_UP);
+        CHECK(p.cur == 12 + 7 * 13 - 13, "up from the top goes to the bottom of the column before");
+        ui_pass_init(&p);
+        ui_pass_key(&p, UI_KEY_LEFT);
+        CHECK(p.cur == 12, "left wraps within the row");
+        for (i = 0; i < 7; i++) ui_pass_key(&p, UI_KEY_UP);
+        CHECK(p.cur == 11, "seven ups climb the column before back to its top");
+        p.cur = 7 * 13 + 3, ui_pass_key(&p, UI_KEY_SELECT);
+        CHECK(!strcmp(p.text, " ") && !strcmp(p.screen.text[3], "1/64 [space]"), "space is the last character");
+        ui_pass_key(&p, UI_KEY_RIGHT), ui_pass_key(&p, UI_KEY_SELECT);
+        CHECK(p.len == 0 && !p.text[0], "DEL removes the last character");
+        ui_pass_key(&p, UI_KEY_RIGHT), ui_pass_key(&p, UI_KEY_RIGHT);
+        CHECK(p.cur == 7 * 13, "right wraps within the short last row");
+        ui_pass_key(&p, UI_KEY_LEFT);
+        CHECK(p.cur == 7 * 13 + 5 && ui_pass_key(&p, UI_KEY_SELECT) == UI_APPROVED, "OK ends the entry");
+        CHECK(ui_pass_key(&p, UI_KEY_A) == UI_REJECTED, "A cancels");
+        ui_pass_init(&p);
+        for (i = 0; i < 97 * 2; i++) ui_pass_key(&p, UI_KEY_DOWN);
+        CHECK(p.cur == 0, "down alone visits all 97 keys and comes back");
+        for (i = 0; i < UI_PASS_MAX + 5; i++) ui_pass_key(&p, UI_KEY_SELECT);
+        CHECK(p.len == UI_PASS_MAX && strlen(p.text) == UI_PASS_MAX, "stops at the maximum length");
+        CHECK(strlen(p.screen.text[2]) == 19 && !strncmp(p.screen.text[3], "64/64", 5),
+              "the end of a long one is shown");
+    }
     printf("%d/%d checks passed\n", checks - failures, checks);
     return failures != 0;
 }

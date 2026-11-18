@@ -54,6 +54,20 @@ typedef struct {
 void ui_menu_init(ui_menu_t *m, const char *title, const char *const *items, unsigned int n);
 /* Returns the chosen item's index, or UI_MENU_PENDING or UI_MENU_BACK */
 int ui_menu_key(ui_menu_t *m, int key);
+/* The BIP39 passphrase, typed on a grid of the printable ASCII characters plus DEL and OK, so the
+ * arrows and SELECT are enough. ASCII only: NFKD then leaves it as typed */
+#define UI_PASS_MAX 64
+
+typedef struct {
+    ui_screen_t screen;
+    char text[UI_PASS_MAX + 1];
+    unsigned int len, cur;
+} ui_pass_t;
+
+void ui_pass_init(ui_pass_t *p);
+/* Returns UI_APPROVED on OK, UI_REJECTED on A, otherwise UI_PENDING */
+int ui_pass_key(ui_pass_t *p, int key);
+
 /* A text-only screen, for startup, errors and warnings */
 void ui_message(ui_screen_t *s, const char *title, const char *body, int warn);
 

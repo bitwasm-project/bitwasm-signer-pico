@@ -333,18 +333,59 @@ static void scan_and_sign(void) {
     psbt_give();
 }
 
+/* Asks for the BIP39 passphrase and loads the seed built from it and the mnemonic. A typo is not an
+ * error but another wallet, so a passphrase's fingerprint is shown to be checked */
+static int load_seed(const char *mnemonic) {
+    static const char *const items[] = {"No passphrase", "Enter passphrase"};
+    uint8_t salt[8 + UI_PASS_MAX], seed[64];
+    ui_pass_t pass;
+    int sel, ok;
+
+    ui_menu_init(&menu, "Passphrase?", items, 2);
+    show(&menu.screen);
+    while ((sel = ui_menu_key(&menu, wait_key())) == UI_MENU_PENDING) show(&menu.screen);
+    if (sel == UI_MENU_BACK) return 0;
+    ui_pass_init(&pass);
+    if (sel == 1) {
+        show(&pass.screen);
+        while ((sel = ui_pass_key(&pass, wait_key())) == UI_PENDING) show(&pass.screen);
+        if (sel == UI_REJECTED) return wipe(&pass, sizeof(pass)), 0;
+    }
+    memcpy(salt, "mnemonic", 8);
+    memcpy(salt + 8, pass.text, pass.len);
+    pbkdf2_hmac_sha512((const uint8_t *)mnemonic, strlen(mnemonic), salt, 8 + pass.len, 2048, seed);
+    ok = core_load_seed(seed);
+    wipe(seed, sizeof(seed));
+    wipe(salt, sizeof(salt));
+    if (ok) {
+        printf("seed loaded, %s passphrase, fingerprint %08x\n", pass.len ? "with" : "no",
+               (unsigned int)core_fingerprint());
+#if defined(__EMSCRIPTEN__)
+        char xpub[CORE_XPUB_MAX], desc[CORE_DESC_MAX];
+        if (core_account_xpub(84, 0, xpub, desc) == CORE_OK) printf("wallet descriptor: %s\n", desc);
+#endif
+        if (pass.len) {
+            char body[80];
+            snprintf(body, sizeof(body), "Fingerprint %08x. A different one means a different passphrase.",
+                     (unsigned int)core_fingerprint());
+            message("Check fingerprint", body, 0);
+        }
+    }
+    wipe(&pass, sizeof(pass));
+    return ok;
+}
+
 /* Reads a SeedQR and loads the seed. It is the secret itself, so it is handled here and never goes
  * through the parser */
 static int scan_seed(void) {
     char status[UI_COLS + 1], mnemonic[256];
-    uint8_t seed[64];
-    int ok = 0;
+    int got = 0, ok = 0;
 
     if (!camera_ready) return message("No camera", "Wire it up or use the test seed.", 1), 0;
     if (!qr_reader_open()) return message("Out of memory", NULL, 1), 0;
     snprintf(status, sizeof(status), "Scan SeedQR");
 
-    while (!ok) {
+    while (!got) {
         int32_t read;
         if (buttons_poll() >= 0) break;
         if (!camera_capture(qr_reader_frame(), 500)) continue;
@@ -355,49 +396,21 @@ static int scan_seed(void) {
         } else if (read == QR_READER_WRONG_KIND) {
             snprintf(status, sizeof(status), "Not a valid SeedQR");
         } else if (read > 0) {
-            if (!seedqr_decode(qr_reader_output(), (size_t)read, mnemonic, sizeof(mnemonic))) {
-                snprintf(status, sizeof(status), "Not a valid SeedQR");
-                continue;
-            }
-            pbkdf2_hmac_sha512((const uint8_t *)mnemonic, strlen(mnemonic), (const uint8_t *)"mnemonic", 8, 2048, seed);
-            ok = core_load_seed(seed);
+            got = seedqr_decode(qr_reader_output(), (size_t)read, mnemonic, sizeof(mnemonic));
+            if (!got) snprintf(status, sizeof(status), "Not a valid SeedQR");
         }
     }
     /* The captured frame still holds the SeedQR, readable over SWD */
     qr_reader_close();
+    if (got) ok = load_seed(mnemonic);
     wipe(mnemonic, sizeof(mnemonic));
-    wipe(seed, sizeof(seed));
-    if (ok) {
-        printf("seed from SeedQR, fingerprint %08x\n", (unsigned int)core_fingerprint());
-#if defined(__EMSCRIPTEN__)
-        char xpub[CORE_XPUB_MAX], desc[CORE_DESC_MAX];
-        if (core_account_xpub(84, 0, xpub, desc) == CORE_OK) printf("wallet descriptor: %s\n", desc);
-#endif
-    }
     return ok;
 }
 
 #if TEST_SEED
 static int load_test_seed(void) {
-    uint8_t seed[64];
-    uint64_t t;
-    int ok;
-
     message("TEST SEED", "Public BIP39 vector. Never send funds to this wallet.", 1);
-    t = time_us_64();
-    pbkdf2_hmac_sha512((const uint8_t *)TEST_MNEMONIC, sizeof(TEST_MNEMONIC) - 1, (const uint8_t *)"mnemonic", 8, 2048,
-                       seed);
-    ok = core_load_seed(seed);
-    memset(seed, 0, sizeof(seed));
-    printf("seed %llu us, fingerprint %08x\n", (unsigned long long)(time_us_64() - t),
-           (unsigned int)core_fingerprint());
-#if defined(__EMSCRIPTEN__)
-    if (ok) {
-        char xpub[CORE_XPUB_MAX], desc[CORE_DESC_MAX];
-        if (core_account_xpub(84, 0, xpub, desc) == CORE_OK) printf("wallet descriptor: %s\n", desc);
-    }
-#endif
-    return ok;
+    return load_seed(TEST_MNEMONIC);
 }
 #endif
 

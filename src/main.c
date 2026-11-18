@@ -16,7 +16,7 @@
 #include "camera.h"
 #include "qr_reader.h"
 #include "seedqr.h"
-#if !QRBOOT_APP
+#if !QRBOOT_APP && !PARSER_NATIVE
 #include "parser_wasm.h"
 #endif
 #include "test_psbt.h"
@@ -28,7 +28,7 @@
 
 /* parser.wasm's linear memory comes out of this pool too, about 132KB with UR reassembly and
  * encoding. Measured at 149KB peak under QEMU */
-#if !QRBOOT_APP
+#if !QRBOOT_APP && !PARSER_NATIVE
 static char pool[160 * 1024];
 static uint8_t parser_wasm_rw[sizeof(parser_wasm)];
 #endif
@@ -38,7 +38,6 @@ static uint8_t parser_wasm_rw[sizeof(parser_wasm)];
 static uint8_t *prevtx_arena, *signed_psbt, *psbt;
 static int camera_ready;
 static plan_t plan;
-static ui_review_t review_ui;
 static ui_menu_t menu;
 
 /* With NO_LCD=1 the screens' text goes to the UART instead of the panel, which is how this was
@@ -76,6 +75,35 @@ static void message(const char *title, const char *body, int warn) {
     wait_key();
 }
 
+#if PARSER_NATIVE
+/* The parser is linked in, so the PSBT stays in its own buffers: the RP2040 has no room for copies
+ * beside the QR reader */
+#include "psbt_parser.h"
+static int psbt_take(void) {
+    return psbt = parser_input(), 1;
+}
+
+static void psbt_give(void) {
+    psbt = NULL;
+}
+
+static int sign_buffers_take(void) {
+    prevtx_arena = NULL, signed_psbt = parser_output();
+    return 1;
+}
+
+static void sign_buffers_give(void) {
+    signed_psbt = NULL;
+}
+#else
+static int psbt_take(void) {
+    return (psbt = malloc(PARSER_PSBT_MAX)) != NULL;
+}
+
+static void psbt_give(void) {
+    free(psbt), psbt = NULL;
+}
+
 /* The buffers the signing step uses, released on the way back to the menu because the QR reader
  * takes the same memory */
 static int sign_buffers_take(void) {
@@ -89,6 +117,7 @@ static void sign_buffers_give(void) {
     free(signed_psbt);
     prevtx_arena = signed_psbt = NULL;
 }
+#endif
 
 /* Shows the captured frame cropped to fill the display. */
 static void show_preview(const uint8_t *img, const char *status) {
@@ -143,9 +172,9 @@ static uint32_t scan_psbt(void) {
     char status[UI_COLS + 1];
 
     if (!camera_ready) return message("No camera", "Wire it up or use the test PSBT.", 1), 0;
-    if (!(psbt = malloc(PARSER_PSBT_MAX))) return message("Out of memory", NULL, 1), 0;
+    if (!psbt_take()) return message("Out of memory", NULL, 1), 0;
     if (!qr_reader_open()) {
-        free(psbt), psbt = NULL;
+        psbt_give();
         return message("Out of memory", NULL, 1), 0;
     }
     parser_host_ur_reset();
@@ -169,7 +198,7 @@ static uint32_t scan_psbt(void) {
         }
     }
     qr_reader_close();
-    if (!len) free(psbt), psbt = NULL;
+    if (!len) psbt_give();
     printf("scan: %u parts, psbt %u bytes\n", parts, (unsigned int)len);
     return len;
 }
@@ -255,19 +284,23 @@ static void sign_flow(const uint8_t *in, uint32_t in_len) {
     }
     printf("review %llu us\n", (unsigned long long)(time_us_64() - t));
 
-    ui_review_init(&review_ui, &display);
-    show(&review_ui.screens[0]);
+    /* From the heap, so that it is not held while the QR reader is */
+    ui_review_t *review_ui = malloc(sizeof(*review_ui));
+    if (!review_ui) return sign_buffers_give(), message("Out of memory", NULL, 1);
+    ui_review_init(review_ui, &display);
+    show(&review_ui->screens[0]);
     while (decision == UI_PENDING) {
         int key = buttons_poll();
         if (key >= 0) {
-            unsigned int before = review_ui.cur;
-            unsigned int selection = review_ui.screens[review_ui.cur].selection;
-            decision = ui_review_key(&review_ui, key);
-            if (review_ui.cur != before || review_ui.screens[review_ui.cur].selection != selection)
-                show(&review_ui.screens[review_ui.cur]);
+            unsigned int before = review_ui->cur;
+            unsigned int selection = review_ui->screens[review_ui->cur].selection;
+            decision = ui_review_key(review_ui, key);
+            if (review_ui->cur != before || review_ui->screens[review_ui->cur].selection != selection)
+                show(&review_ui->screens[review_ui->cur]);
         }
         sleep_ms(10);
     }
+    free(review_ui);
     if (decision == UI_REJECTED) {
         sign_buffers_give();
         return;
@@ -297,7 +330,7 @@ static void scan_and_sign(void) {
     uint32_t len = scan_psbt();
     if (!len) return;
     sign_flow(psbt, len);
-    free(psbt), psbt = NULL;
+    psbt_give();
 }
 
 /* Reads a SeedQR and loads the seed. It is the secret itself, so it is handled here and never goes
@@ -423,6 +456,8 @@ static void show_parser_hash(void) {
 #if QRBOOT_APP
     /* The parser is part of this app, whose hash the loader showed before running it */
     message("Parser", "Built into this app. Its hash was shown when it was loaded.", 0);
+#elif PARSER_NATIVE
+    message("Parser", "Compiled into this firmware; there is no parser.wasm.", 0);
 #else
     static ui_screen_t s;
     uint8_t h[32];
@@ -513,7 +548,7 @@ int main(void) {
     buttons_init();
     printf("\nbitwasm-signer-pico (%s)\n", TESTNET ? "testnet/signet" : "mainnet");
 
-#if QRBOOT_APP
+#if QRBOOT_APP || PARSER_NATIVE
     if (!core_init(TESTNET ? CORE_TESTNET : CORE_MAINNET) || !parser_host_init(NULL, 0, NULL, 0)) {
 #else
     memcpy(parser_wasm_rw, parser_wasm, sizeof(parser_wasm_rw));

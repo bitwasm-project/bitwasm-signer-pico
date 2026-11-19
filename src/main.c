@@ -16,7 +16,9 @@
 #include "camera.h"
 #include "qr_reader.h"
 #include "seedqr.h"
+#if !QRBOOT_APP && !PARSER_NATIVE
 #include "parser_wasm.h"
+#endif
 #include "test_psbt.h"
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
@@ -26,15 +28,16 @@
 
 /* parser.wasm's linear memory comes out of this pool too, about 132KB with UR reassembly and
  * encoding. Measured at 149KB peak under QEMU */
+#if !QRBOOT_APP && !PARSER_NATIVE
 static char pool[160 * 1024];
 static uint8_t parser_wasm_rw[sizeof(parser_wasm)];
+#endif
 /* Not needed at the same time as the QR reader (106KB, 77KB of it the image), so this is taken from
  * the heap only for the signing step */
 #define SIGNED_PSBT_MAX (PARSER_PSBT_MAX + 2048)
 static uint8_t *prevtx_arena, *signed_psbt, *psbt;
 static int camera_ready;
 static plan_t plan;
-static ui_review_t review_ui;
 static ui_menu_t menu;
 
 /* With NO_LCD=1 the screens' text goes to the UART instead of the panel, which is how this was
@@ -72,6 +75,35 @@ static void message(const char *title, const char *body, int warn) {
     wait_key();
 }
 
+#if PARSER_NATIVE
+/* The parser is linked in, so the PSBT stays in its own buffers: the RP2040 has no room for copies
+ * beside the QR reader */
+#include "psbt_parser.h"
+static int psbt_take(void) {
+    return psbt = parser_input(), 1;
+}
+
+static void psbt_give(void) {
+    psbt = NULL;
+}
+
+static int sign_buffers_take(void) {
+    prevtx_arena = NULL, signed_psbt = parser_output();
+    return 1;
+}
+
+static void sign_buffers_give(void) {
+    signed_psbt = NULL;
+}
+#else
+static int psbt_take(void) {
+    return (psbt = malloc(PARSER_PSBT_MAX)) != NULL;
+}
+
+static void psbt_give(void) {
+    free(psbt), psbt = NULL;
+}
+
 /* The buffers the signing step uses, released on the way back to the menu because the QR reader
  * takes the same memory */
 static int sign_buffers_take(void) {
@@ -85,6 +117,7 @@ static void sign_buffers_give(void) {
     free(signed_psbt);
     prevtx_arena = signed_psbt = NULL;
 }
+#endif
 
 /* Shows the captured frame cropped to fill the display. */
 static void show_preview(const uint8_t *img, const char *status) {
@@ -139,9 +172,9 @@ static uint32_t scan_psbt(void) {
     char status[UI_COLS + 1];
 
     if (!camera_ready) return message("No camera", "Wire it up or use the test PSBT.", 1), 0;
-    if (!(psbt = malloc(PARSER_PSBT_MAX))) return message("Out of memory", NULL, 1), 0;
+    if (!psbt_take()) return message("Out of memory", NULL, 1), 0;
     if (!qr_reader_open()) {
-        free(psbt), psbt = NULL;
+        psbt_give();
         return message("Out of memory", NULL, 1), 0;
     }
     parser_host_ur_reset();
@@ -165,7 +198,7 @@ static uint32_t scan_psbt(void) {
         }
     }
     qr_reader_close();
-    if (!len) free(psbt), psbt = NULL;
+    if (!len) psbt_give();
     printf("scan: %u parts, psbt %u bytes\n", parts, (unsigned int)len);
     return len;
 }
@@ -251,19 +284,23 @@ static void sign_flow(const uint8_t *in, uint32_t in_len) {
     }
     printf("review %llu us\n", (unsigned long long)(time_us_64() - t));
 
-    ui_review_init(&review_ui, &display);
-    show(&review_ui.screens[0]);
+    /* From the heap, so that it is not held while the QR reader is */
+    ui_review_t *review_ui = malloc(sizeof(*review_ui));
+    if (!review_ui) return sign_buffers_give(), message("Out of memory", NULL, 1);
+    ui_review_init(review_ui, &display);
+    show(&review_ui->screens[0]);
     while (decision == UI_PENDING) {
         int key = buttons_poll();
         if (key >= 0) {
-            unsigned int before = review_ui.cur;
-            unsigned int selection = review_ui.screens[review_ui.cur].selection;
-            decision = ui_review_key(&review_ui, key);
-            if (review_ui.cur != before || review_ui.screens[review_ui.cur].selection != selection)
-                show(&review_ui.screens[review_ui.cur]);
+            unsigned int before = review_ui->cur;
+            unsigned int selection = review_ui->screens[review_ui->cur].selection;
+            decision = ui_review_key(review_ui, key);
+            if (review_ui->cur != before || review_ui->screens[review_ui->cur].selection != selection)
+                show(&review_ui->screens[review_ui->cur]);
         }
         sleep_ms(10);
     }
+    free(review_ui);
     if (decision == UI_REJECTED) {
         sign_buffers_give();
         return;
@@ -293,21 +330,62 @@ static void scan_and_sign(void) {
     uint32_t len = scan_psbt();
     if (!len) return;
     sign_flow(psbt, len);
-    free(psbt), psbt = NULL;
+    psbt_give();
+}
+
+/* Asks for the BIP39 passphrase and loads the seed built from it and the mnemonic. A typo is not an
+ * error but another wallet, so a passphrase's fingerprint is shown to be checked */
+static int load_seed(const char *mnemonic) {
+    static const char *const items[] = {"No passphrase", "Enter passphrase"};
+    uint8_t salt[8 + UI_PASS_MAX], seed[64];
+    ui_pass_t pass;
+    int sel, ok;
+
+    ui_menu_init(&menu, "Passphrase?", items, 2);
+    show(&menu.screen);
+    while ((sel = ui_menu_key(&menu, wait_key())) == UI_MENU_PENDING) show(&menu.screen);
+    if (sel == UI_MENU_BACK) return 0;
+    ui_pass_init(&pass);
+    if (sel == 1) {
+        show(&pass.screen);
+        while ((sel = ui_pass_key(&pass, wait_key())) == UI_PENDING) show(&pass.screen);
+        if (sel == UI_REJECTED) return wipe(&pass, sizeof(pass)), 0;
+    }
+    memcpy(salt, "mnemonic", 8);
+    memcpy(salt + 8, pass.text, pass.len);
+    pbkdf2_hmac_sha512((const uint8_t *)mnemonic, strlen(mnemonic), salt, 8 + pass.len, 2048, seed);
+    ok = core_load_seed(seed);
+    wipe(seed, sizeof(seed));
+    wipe(salt, sizeof(salt));
+    if (ok) {
+        printf("seed loaded, %s passphrase, fingerprint %08x\n", pass.len ? "with" : "no",
+               (unsigned int)core_fingerprint());
+#if defined(__EMSCRIPTEN__)
+        char xpub[CORE_XPUB_MAX], desc[CORE_DESC_MAX];
+        if (core_account_xpub(84, 0, xpub, desc) == CORE_OK) printf("wallet descriptor: %s\n", desc);
+#endif
+        if (pass.len) {
+            char body[80];
+            snprintf(body, sizeof(body), "Fingerprint %08x. A different one means a different passphrase.",
+                     (unsigned int)core_fingerprint());
+            message("Check fingerprint", body, 0);
+        }
+    }
+    wipe(&pass, sizeof(pass));
+    return ok;
 }
 
 /* Reads a SeedQR and loads the seed. It is the secret itself, so it is handled here and never goes
  * through the parser */
 static int scan_seed(void) {
     char status[UI_COLS + 1], mnemonic[256];
-    uint8_t seed[64];
-    int ok = 0;
+    int got = 0, ok = 0;
 
     if (!camera_ready) return message("No camera", "Wire it up or use the test seed.", 1), 0;
     if (!qr_reader_open()) return message("Out of memory", NULL, 1), 0;
     snprintf(status, sizeof(status), "Scan SeedQR");
 
-    while (!ok) {
+    while (!got) {
         int32_t read;
         if (buttons_poll() >= 0) break;
         if (!camera_capture(qr_reader_frame(), 500)) continue;
@@ -318,49 +396,21 @@ static int scan_seed(void) {
         } else if (read == QR_READER_WRONG_KIND) {
             snprintf(status, sizeof(status), "Not a valid SeedQR");
         } else if (read > 0) {
-            if (!seedqr_decode(qr_reader_output(), (size_t)read, mnemonic, sizeof(mnemonic))) {
-                snprintf(status, sizeof(status), "Not a valid SeedQR");
-                continue;
-            }
-            pbkdf2_hmac_sha512((const uint8_t *)mnemonic, strlen(mnemonic), (const uint8_t *)"mnemonic", 8, 2048, seed);
-            ok = core_load_seed(seed);
+            got = seedqr_decode(qr_reader_output(), (size_t)read, mnemonic, sizeof(mnemonic));
+            if (!got) snprintf(status, sizeof(status), "Not a valid SeedQR");
         }
     }
     /* The captured frame still holds the SeedQR, readable over SWD */
     qr_reader_close();
+    if (got) ok = load_seed(mnemonic);
     wipe(mnemonic, sizeof(mnemonic));
-    wipe(seed, sizeof(seed));
-    if (ok) {
-        printf("seed from SeedQR, fingerprint %08x\n", (unsigned int)core_fingerprint());
-#if defined(__EMSCRIPTEN__)
-        char xpub[CORE_XPUB_MAX], desc[CORE_DESC_MAX];
-        if (core_account_xpub(84, 0, xpub, desc) == CORE_OK) printf("wallet descriptor: %s\n", desc);
-#endif
-    }
     return ok;
 }
 
 #if TEST_SEED
 static int load_test_seed(void) {
-    uint8_t seed[64];
-    uint64_t t;
-    int ok;
-
     message("TEST SEED", "Public BIP39 vector. Never send funds to this wallet.", 1);
-    t = time_us_64();
-    pbkdf2_hmac_sha512((const uint8_t *)TEST_MNEMONIC, sizeof(TEST_MNEMONIC) - 1, (const uint8_t *)"mnemonic", 8, 2048,
-                       seed);
-    ok = core_load_seed(seed);
-    memset(seed, 0, sizeof(seed));
-    printf("seed %llu us, fingerprint %08x\n", (unsigned long long)(time_us_64() - t),
-           (unsigned int)core_fingerprint());
-#if defined(__EMSCRIPTEN__)
-    if (ok) {
-        char xpub[CORE_XPUB_MAX], desc[CORE_DESC_MAX];
-        if (core_account_xpub(84, 0, xpub, desc) == CORE_OK) printf("wallet descriptor: %s\n", desc);
-    }
-#endif
-    return ok;
+    return load_seed(TEST_MNEMONIC);
 }
 #endif
 
@@ -416,6 +466,12 @@ static void show_xpub(unsigned int purpose) {
 /* The hash of the parser.wasm actually loaded. Matching it against the bitwasm-signer viewer is
  * how you confirm the device is running the same module you are */
 static void show_parser_hash(void) {
+#if QRBOOT_APP
+    /* The parser is part of this app, whose hash the loader showed before running it */
+    message("Parser", "Built into this app. Its hash was shown when it was loaded.", 0);
+#elif PARSER_NATIVE
+    message("Parser", "Compiled into this firmware; there is no parser.wasm.", 0);
+#else
     static ui_screen_t s;
     uint8_t h[32];
 
@@ -426,6 +482,7 @@ static void show_parser_hash(void) {
     for (int i = 0; i < 32; i++) printf("%02x", h[i]);
     printf("\n");
     wait_key();
+#endif
 }
 
 static void watch_only_menu(void) {
@@ -504,10 +561,14 @@ int main(void) {
     buttons_init();
     printf("\nbitwasm-signer-pico (%s)\n", TESTNET ? "testnet/signet" : "mainnet");
 
+#if QRBOOT_APP || PARSER_NATIVE
+    if (!core_init(TESTNET ? CORE_TESTNET : CORE_MAINNET) || !parser_host_init(NULL, 0, NULL, 0)) {
+#else
     memcpy(parser_wasm_rw, parser_wasm, sizeof(parser_wasm_rw));
     /* A TESTNET=1 build targets signet and testnet: tb1 addresses, derived under m/84'/1'/... */
     if (!core_init(TESTNET ? CORE_TESTNET : CORE_MAINNET) ||
         !parser_host_init(parser_wasm_rw, sizeof(parser_wasm_rw), pool, sizeof(pool))) {
+#endif
         message("Init failed", NULL, 1);
         return 1;
     }

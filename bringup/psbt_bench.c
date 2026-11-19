@@ -9,19 +9,32 @@
 #include "pico/stdlib.h"
 #include "core.h"
 #include "parser_host.h"
+#include "sha256.h"
 #include "sha512.h"
 #include "ui.h"
 #include "qr_reader.h"
-#include "parser_wasm.h"
 #include "test_psbt.h"
+#if PARSER_NATIVE
+#include "psbt_parser.h"
+#endif
 
 #define TEST_MNEMONIC "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 
+#if PARSER_NATIVE
+#define MODE "native parser"
+#undef POOL_KB
+#define POOL_KB 0
+static const uint8_t parser_wasm[1];
+static char pool[1];
+#else
+#include "parser_wasm.h"
 #ifndef POOL_KB
 #define POOL_KB 256
 #endif
 static char pool[POOL_KB * 1024];
-#if WASM_ENABLE_INTERP != 0
+#endif
+#if PARSER_NATIVE
+#elif WASM_ENABLE_INTERP != 0
 #define MODE "classic interp"
 /* The classic interpreter rewrites the bytecode on load, so it cannot be handed the copy in flash */
 static uint8_t parser_wasm_rw[sizeof(parser_wasm)];
@@ -66,9 +79,14 @@ int main(void) {
     qr_reader_close();
 
     /* The parse-and-sign step, taking the PSBT buffers from that same heap */
+#if PARSER_NATIVE
+    /* As main.c does with the parser linked in: no copies, the parser's own buffers */
+    prevtx_arena = NULL, signed_psbt = parser_output();
+#else
     prevtx_arena = malloc(PARSER_PSBT_MAX);
     signed_psbt = malloc(SIGNED_PSBT_MAX);
     if (!prevtx_arena || !signed_psbt) return printf("psbt buffers failed\n"), 1;
+#endif
     printf("sign phase: psbt buffers %d B (arena %d B)\n", mallinfo().uordblks, mallinfo().arena);
 
     t = time_us_64();
@@ -124,6 +142,11 @@ int main(void) {
 
     printf("signed %u bytes, first 32: ", (unsigned int)out_len);
     for (int i = 0; i < 32; i++) printf("%02x", signed_psbt[i]);
+    /* Compare with components/parts/signer/tests/golden/own_mixed_nwu.signed.sha256 */
+    uint8_t h[32];
+    sha256(signed_psbt, out_len, h);
+    printf("\nsigned sha256 ");
+    for (int i = 0; i < 32; i++) printf("%02x", h[i]);
     printf("\npool_highmark %u\nheap arena %d B (%d B if not shared)\ndone\n",
            (unsigned int)parser_host_pool_highmark(), mallinfo().arena,
            reader_heap + PARSER_PSBT_MAX + SIGNED_PSBT_MAX);

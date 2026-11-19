@@ -32,5 +32,5 @@ int buttons_poll(void) {
         history[i] = (unsigned char)(history[i] << 1 | gpio_get(pins[i]));
         if ((history[i] & 0x0f) == 0x08 && pressed < 0) pressed = (int)i;
     }
-    return pressed;
+    return pressed == UI_KEY_A ? UI_KEY_SELECT : pressed; /* A confirms like the joystick push; B cancels */
 }

@@ -15,8 +15,9 @@ Not reviewed by a third party. signet only. See [Disclaimer](../README.md#discla
   (BIP48, `m/48'/coin'/account'/2'`). The device holds no cosigner keys, so P2WSH change is shown as an
   external address to check by eye, and the Core wallet combines the cosigners' PSBTs.
   A P2WSH spend of two or more inputs needs `non_witness_utxo`, as P2WPKH does.
-- **[BIP39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki) passphrase input is planned but not available in the firmware yet.** The shared `signer.wasm`
-  interface accepts a passphrase; the Pico firmware currently derives the seed with an empty passphrase.
+- A **[BIP39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki) passphrase** is typed on the device after the seed is loaded:
+  **printable ASCII only, at most 64 characters**, so NFKD leaves it as typed. A mistyped one is not an
+  error but another wallet; the device shows its fingerprint to compare.
 - At most **16 inputs and 16 outputs**, and a PSBT of at most **32,768 bytes**.
 - scriptPubKey at most **83 bytes** (the standard OP_RETURN limit; P2TR and P2WSH are 34).
 - Script-path taproot spends, miniscript, and time locks beyond nLockTime passthrough are not handled.
@@ -72,7 +73,15 @@ Not reviewed by a third party. signet only. See [Disclaimer](../README.md#discla
 
 ## Hardware
 
-- One board is supported: Raspberry Pi Pico 2 (RP2350, RISC-V Hazard3). No other target is tested.
+- The supported board is Raspberry Pi Pico 2 (RP2350, RISC-V Hazard3). The original Pico (RP2040) builds
+  with `PICO_PLATFORM=rp2040` and is experimental: signing is tested on it, but not yet with its camera.
+- On the RP2040 the parser is compiled into the firmware instead of run as `parser.wasm`, so there is no
+  parser hash to compare with the viewer; the only check is building the firmware yourself.
+- **The RP2040 has no secure boot.** Anyone holding it can flash other firmware through BOOTSEL, and
+  nothing on the device notices. Flash a firmware you built yourself, and flash it again before use.
+- **The RP2040 cannot disable SWD.** The RP2350 can lock debug access in OTP; the RP2040 cannot, so
+  anyone who can touch its SWD pins while it runs can read the seed from RAM. Nothing is stored in flash,
+  so a device taken after power-off holds no key.
 - There is no secure element, no tamper detection, no encrypted storage, and no battery-backed RAM.
 - The boot ROM of the RP2350 is not open source.
 - Builds with `TEST_SEED=1` can select a published test seed. Never put funds on such a build.

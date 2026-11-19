@@ -33,3 +33,14 @@ build/rp2350/pio_loopback_test.elf: bringup/pio_loopback_test.c bringup/dvp_gen.
 build/rp2350/camera_test.elf: bringup/camera_test.c src/drivers/camera.c src/drivers/camera.pio \
   src/drivers/camera_ov7670.c CMakeLists.txt build/rp2350/app.elf
 	ninja -C build/rp2350 camera_test
+
+# The original Pico (RP2040), e.g. make build/rp2040/psbt_bench.elf. Needs the Arm GNU toolchain in ARM_TC;
+# add RP2040_FLAGS=-DSTDIO_SEMIHOSTING=1 when the UART is not wired
+ARM_TC ?= $(CURDIR)/third_party/arm-toolchain
+build/rp2040/%.elf: build/font8x16.h build/test_psbt.h build/qr_frames.h FORCE
+	cmake -S . -B build/rp2040 -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DPICO_SDK_PATH=$(CURDIR)/third_party/pico-sdk \
+	  -DPICO_PLATFORM=rp2040 -DPICO_BOARD=pico -DPICO_TOOLCHAIN_PATH=$(ARM_TC) -DTESTNET=$(TESTNET) \
+	  -DTEST_SEED=$(TEST_SEED) -DSIGNER_WASM_H_DIR=$(CURDIR)/build $(RP2040_FLAGS) >/dev/null
+	ninja -C build/rp2040 $*
+FORCE:
+.PHONY: FORCE

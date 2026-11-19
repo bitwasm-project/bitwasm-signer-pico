@@ -16,6 +16,7 @@
 #define C_ACTIVE RGB565(33, 27, 16)
 #define C_SEND_BG RGB565(27, 13, 11)
 #define C_SEND_BORDER RGB565(87, 53, 45)
+#define C_OK_BG RGB565(12, 32, 18)
 
 typedef struct {
     ui_screen_t *s;
@@ -142,7 +143,7 @@ void ui_review_init(ui_review_t *r, const core_display_t *d) {
 
 int ui_review_key(ui_review_t *r, int key) {
     unsigned int final = r->n - 1, must_see = (1u << final) - 1;
-    if (key == UI_KEY_A) return UI_REJECTED;
+    if (key == UI_KEY_B) return UI_REJECTED;
     if (key == UI_KEY_SELECT) {
         if (r->cur == final) {
             if (r->screens[final].selection == 0) {
@@ -199,11 +200,68 @@ void ui_menu_init(ui_menu_t *m, const char *title, const char *const *items, uns
 
 int ui_menu_key(ui_menu_t *m, int key) {
     if (key == UI_KEY_SELECT || key == UI_KEY_RIGHT) return (int)m->cur;
-    if (key == UI_KEY_A || key == UI_KEY_LEFT) return UI_MENU_BACK;
+    if (key == UI_KEY_B || key == UI_KEY_LEFT) return UI_MENU_BACK;
     if (key == UI_KEY_DOWN) m->cur = (m->cur + 1) % m->n;
     if (key == UI_KEY_UP) m->cur = (m->cur + m->n - 1) % m->n;
     menu_draw(m);
     return UI_MENU_PENDING;
+}
+
+#define PASS_COLS 13
+#define PASS_CHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~ "
+#define PASS_DEL (sizeof(PASS_CHARS) - 1)
+#define PASS_OK (PASS_DEL + 1)
+#define PASS_CELLS (PASS_OK + 1)
+#define PASS_SHOWN 19 /* the end of what was typed, leaving room for the count at the right */
+
+/* Row 2 is what was typed, shortened to its end; row 3 names the key under the cursor */
+static void pass_draw(ui_pass_t *p) {
+    writer_t w = {&p->screen, 0};
+    char line[UI_COLS + 1], key[6] = {PASS_CHARS[p->cur < PASS_DEL ? p->cur : 0], 0};
+    size_t from = p->len > PASS_SHOWN ? p->len - PASS_SHOWN : 0;
+    memset(&p->screen, 0, sizeof(p->screen));
+    p->screen.selection = (uint8_t)p->cur;
+    put_header(&w);
+    put(&w, C_TITLE, "Passphrase");
+    put(&w, C_TEXT, p->text + from);
+    if (p->cur >= PASS_DEL || key[0] == ' ')
+        strcpy(key, p->cur == PASS_DEL ? "DEL" : p->cur == PASS_OK ? "OK" : "space");
+    snprintf(line, sizeof(line), "%u/%u [%s]", p->len, UI_PASS_MAX, key);
+    put(&w, C_HINT, line);
+}
+
+void ui_pass_init(ui_pass_t *p) {
+    memset(p, 0, sizeof(*p));
+    pass_draw(p);
+}
+
+int ui_pass_key(ui_pass_t *p, int key) {
+    unsigned int col = p->cur % PASS_COLS;
+    if (key == UI_KEY_B) return UI_REJECTED;
+    if (key == UI_KEY_SELECT) {
+        if (p->cur == PASS_OK) return UI_APPROVED;
+        if (p->cur == PASS_DEL) {
+            if (p->len) p->text[--p->len] = 0;
+        } else if (p->len < UI_PASS_MAX) {
+            p->text[p->len++] = PASS_CHARS[p->cur];
+        }
+    } else if (key == UI_KEY_RIGHT) {
+        p->cur = p->cur + 1 < PASS_CELLS && col + 1 < PASS_COLS ? p->cur + 1 : p->cur - col;
+    } else if (key == UI_KEY_LEFT) {
+        p->cur = col ? p->cur - 1 : p->cur + PASS_COLS - 1 < PASS_CELLS ? p->cur + PASS_COLS - 1 : PASS_CELLS - 1;
+    } else if (key == UI_KEY_DOWN) {
+        /* Past the bottom goes on to the next column's top, so DOWN alone reaches every key */
+        p->cur = p->cur + PASS_COLS < PASS_CELLS ? p->cur + PASS_COLS : (col + 1) % PASS_COLS;
+    } else if (key == UI_KEY_UP) {
+        if (p->cur >= PASS_COLS) {
+            p->cur -= PASS_COLS;
+        } else {
+            col = (col + PASS_COLS - 1) % PASS_COLS;
+            p->cur = col + (PASS_CELLS - 1 - col) / PASS_COLS * PASS_COLS;
+        }
+    }
+    pass_draw(p);
+    return UI_PENDING;
 }
 
 void ui_message(ui_screen_t *s, const char *title, const char *body, int warn) {
@@ -258,7 +316,7 @@ static void draw_dot(uint16_t line[UI_W], int y, int cx, int cy, int radius, uin
 }
 
 static const char *screen_section(const char *title, int ready, int setup, int summary, int output, int approval) {
-    if (setup) return "WALLET SETUP";
+    if (setup || !strcmp(title, "Passphrase")) return "WALLET SETUP";
     if (ready) return "BITWASM SIGNER";
     if (summary) return "SIGN PSBT / SUMMARY";
     if (output) return title;
@@ -307,6 +365,32 @@ static void draw_card(uint16_t line[UI_W], int y, int x, int top, int width, int
     }
     if (y == top || y == top + height - 1)
         for (int i = 0; i < width; i++) line[x + i] = border;
+}
+
+static void draw_pass(uint16_t line[UI_W], int y, const ui_screen_t *s) {
+    draw_card(line, y, 12, 52, 216, 24, C_PANEL, C_BORDER);
+    draw_small(line, y, 18, 56, s->text[2], C_TEXT);
+    char count[8] = {0};
+    draw_small(line, y, 18 + (int)strlen(s->text[2]) * FONT_W, 56, "_", C_TITLE);
+    /* The count, from row 3, is what shows a trailing space */
+    for (int c = 0; c < 7 && s->text[3][c] != ' '; c++) count[c] = s->text[3][c];
+    draw_small(line, y, 222 - (int)strlen(count) * FONT_W, 56, count, C_HINT);
+    for (unsigned int i = 0; i < PASS_CELLS; i++) {
+        int x = 10 + (int)(i % PASS_COLS) * 17, top = 80 + (int)(i / PASS_COLS) * 18, active = i == s->selection;
+        uint16_t color = active ? C_TITLE : i == PASS_DEL ? C_SEND : i == PASS_OK ? C_OURS : C_TEXT;
+        char label[2] = {PASS_CHARS[i < PASS_DEL ? i : 0], 0};
+        if (y < top || y >= top + 17) continue;
+        fill_rect_line(line, y, x, top, 16, 17,
+                       active          ? C_ACTIVE
+                       : i == PASS_DEL ? C_SEND_BG
+                       : i == PASS_OK  ? C_OK_BG
+                                       : C_PANEL);
+        if (i == PASS_DEL) draw_small(line, y, x, top + 1, "<-", color);
+        else if (i == PASS_OK) draw_small(line, y, x, top + 1, "OK", color);
+        else if (label[0] != ' ') draw_small(line, y, x + 4, top + 1, label, color);
+        else if (y == top + 13) fill_rect_line(line, y, x + 3, top, 10, 17, color); /* an open box, unlike '_' */
+        else if (y >= top + 9 && y < top + 13) line[x + 3] = line[x + 12] = color;
+    }
 }
 
 static void draw_review_actions(uint16_t line[UI_W], int y, const ui_screen_t *s, int final) {
@@ -370,7 +454,9 @@ void ui_render_line(const ui_screen_t *s, int y, uint16_t line[UI_W]) {
         draw_normal(line, y, 13, 32, heading, s->color[1] == C_SEND ? C_SEND : C_TITLE);
     }
 
-    if (s->is_menu) {
+    if (!strcmp(title, "Passphrase")) {
+        draw_pass(line, y, s);
+    } else if (s->is_menu) {
         if (ready) {
             draw_menu(line, y, s, 78);
         } else {

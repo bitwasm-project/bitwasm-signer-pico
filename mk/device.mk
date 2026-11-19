@@ -20,8 +20,10 @@ monitor:
 # Use Raspberry Pi's OpenOCD fork because upstream lacks a RISC-V DAP driver for Hazard3 (make deps-openocd builds it).
 ELF ?= $(UF2:.uf2=.elf)
 OPENOCD_DIR ?= $(HOME)/work/oss/openocd-rpi
+# An ELF under build/rp2040 is for the original Pico; its config halts only with USE_CORE 0
+OPENOCD_TARGET = $(if $(findstring rp2040/,$(ELF)),-c "set USE_CORE 0" -f target/rp2040.cfg,-f target/rp2350-riscv.cfg)
 OPENOCD = $(OPENOCD_DIR)/src/openocd -s $(OPENOCD_DIR)/tcl -f interface/cmsis-dap.cfg \
-  -c "adapter speed 5000" -f target/rp2350-riscv.cfg
+  -c "adapter speed 5000" $(OPENOCD_TARGET)
 # Upstream OpenOCD cannot create the RISC-V target over DAP; rp2350.cfg's -dap option fails.
 deps-openocd:
 	mkdir -p $(dir $(OPENOCD_DIR))

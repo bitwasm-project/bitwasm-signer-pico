@@ -141,7 +141,8 @@ Host and QEMU checks live under `tests/`.
 | `tools/` `docs/` | Build and verification tools, wiring diagrams, measurements, and implementation documentation |  - |
 
 Dependencies (`third_party/`, gitignored) are cloned by `make deps`: libsecp256k1, WAMR 2.4.3,
-pico-sdk 2.3.1, QR-Code-generator, the spleen font, and a RISC-V toolchain.
+pico-sdk 2.3.1, QR-Code-generator, the spleen font, and a RISC-V toolchain. `make deps-rp2040` adds the
+Arm toolchain for the original Pico ([wiring](docs/breadboard-rp2040.md)).
 
 ## Documentation
 

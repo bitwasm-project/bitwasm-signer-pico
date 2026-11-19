@@ -22,24 +22,24 @@ are alternatives or earlier experiments; they are not part of this build.
 | GPIO | pin | what | goes to |
 |---|---|---|---|
 | GP0 | 1 | UART0 TX | the Debug Probe's UART "RX" |
-| GP1 | 2 | unused | spare |
+| GP1 | 2 | button C | tactile switch to GND; not used by the UI yet |
 | GP2-GP9 | 4-7, 9-12 | camera D0-D7 | consecutive, because PIO reads all eight as a run |
 | GP10 | 14 | camera PCLK | |
 | GP11 | 15 | camera HREF | |
 | GP12 | 16 | camera VSYNC | |
-| GP13 | 17 | unused | spare |
+| GP13 | 17 | joystick UP | optional |
 | GP14 | 19 | camera SIO-D (I2C1 SDA) | |
 | GP15 | 20 | camera SIO-C (I2C1 SCL) | |
 | GP16 | 21 | panel DC | |
-| GP17 | 22 | NEXT button | tactile switch to GND |
+| GP17 | 22 | NEXT button, or joystick DOWN | tactile switch to GND |
 | GP18 | 24 | panel SCL (SPI0 SCK) | |
 | GP19 | 25 | panel SDA (SPI0 TX) | |
-| GP20 | 26 | unused | spare |
+| GP20 | 26 | joystick LEFT | optional |
 | GP21 | 27 | camera XCLK (CLOCK GPOUT0) | OV7670 / OV7675 only; spare on an OV2640 board with a crystal |
-| GP22 | 29 | unused | spare |
-| GP26 | 31 | SELECT button | tactile switch to GND |
-| GP27 | 32 | unused | spare |
-| GP28 | 34 | unused | spare |
+| GP22 | 29 | joystick RIGHT | optional |
+| GP26 | 31 | SELECT button, or joystick press | tactile switch to GND |
+| GP27 | 32 | button A: confirm, as SELECT | optional tactile switch to GND |
+| GP28 | 34 | button B: cancel / back | optional tactile switch to GND |
 
 Things to watch when building this on a breadboard:
 
@@ -52,7 +52,8 @@ Things to watch when building this on a breadboard:
 - On the TVDP01-G73BB tactile switches, the two pins that straddle the channel turned out to be the
   connected pair: pressing joins row n to row n+2. Take GND from row n and the signal from row n+2.
   If one does not respond, `button_test.uf2` shows which GPIO actually goes low
-- The current build uses NEXT (GP17) to move and SELECT (GP26) to confirm
+- The current build uses NEXT (GP17) to move and SELECT (GP26) to confirm. The joystick and buttons
+  A and B are optional and share those pins, so the firmware is the same either way
 
 - GP23 (power control), GP24 (VBUS sense), GP25 (LED) and GP29 (VSYS monitor) are used by the board
   itself and not brought out
@@ -63,7 +64,9 @@ Things to watch when building this on a breadboard:
 - 3V3(OUT) (pin 36) feeds the panel and the camera. GND is on pins 3, 8, 13, 18, 23, 28,
   33 and 38
 
-The wiring of the breadboard as actually built is in [docs/breadboard.md](breadboard.md).
+The wiring of the breadboard as actually built is in [docs/breadboard.md](breadboard.md). The
+original Pico (RP2040) build with the joystick and buttons A and B is in
+[docs/breadboard-rp2040.md](breadboard-rp2040.md).
 
 ## Wiring, part by part
 
@@ -101,7 +104,8 @@ already pulled up to +V through 10k and go to GND when pressed.
 ### Tactile switches (two used)
 
 The current build uses two TVDP01-G73BB switches: NEXT on GP17 and SELECT on GP26. One side goes to
-the GPIO and the other to GND; the RP2350's internal pull-ups are enabled.
+the GPIO and the other to GND; the internal pull-ups are enabled. Optional buttons A (GP27) and B
+(GP28) confirm and cancel.
 
 ### The camera
 

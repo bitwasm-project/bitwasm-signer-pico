@@ -136,7 +136,8 @@ make -C components/parts/parser check-fuzz  # 解析器へのファジング
 | `tools/` `docs/` | ビルド・検証ツール、配線図、この実装の設計と実測の記録 | - |
 
 `third_party/`（gitignore 済み）の依存は `make deps` で clone します。libsecp256k1、WAMR 2.4.3、
-pico-sdk 2.3.1、QR-Code-generator、spleen フォント、RISC-V ツールチェーンを取得します。
+pico-sdk 2.3.1、QR-Code-generator、spleen フォント、RISC-V ツールチェーンを取得します。初代 Pico 用の
+Arm ツールチェーンは `make deps-rp2040` で追加します（[配線](../breadboard-rp2040.md)）。
 
 ### 実機のファームの種類
 

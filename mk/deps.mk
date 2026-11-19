@@ -7,6 +7,23 @@ RISCV_TC_PKG := riscv-toolchain-16-x86_64-lin.tar.gz
 RISCV_TC_SUM := fc36f1b37f99de54a358115443638023de34e15fe199e718e50cca4d212e7e9f
 endif
 
+# The Arm GNU toolchain for the original Pico (RP2040), only fetched by make deps-rp2040
+ARM_TC_REL := https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel
+ifeq ($(shell uname -s)-$(shell uname -m),Darwin-arm64)
+ARM_TC_HOST := darwin-arm64
+ARM_TC_SUM  := c7c78ffab9bebfce91d99d3c24da6bf4b81c01e16cf551eb2ff9f25b9e0a3818
+else ifeq ($(shell uname -s),Darwin)
+ARM_TC_HOST := darwin-x86_64
+ARM_TC_SUM  := 2d9e717dd4f7751d18936ae1365d25916534105ebcb7583039eff1092b824505
+else ifeq ($(shell uname -m),aarch64)
+ARM_TC_HOST := aarch64
+ARM_TC_SUM  := 87330bab085dd8749d4ed0ad633674b9dc48b237b61069e3b481abd364d0a684
+else
+ARM_TC_HOST := x86_64
+ARM_TC_SUM  := 62a63b981fe391a9cbad7ef51b17e49aeaa3e7b0d029b36ca1e9c3b2a9b78823
+endif
+ARM_TC_PKG := arm-gnu-toolchain-14.2.rel1-$(ARM_TC_HOST)-arm-none-eabi.tar.xz
+
 # Pin every dependency to a commit, especially code that handles keys; never track the tip of a branch.
 # Review the diff before updating a pin.
 SECP_REV   := 46db787112beabdb5e17e0dc35680716f1057e7b
@@ -34,6 +51,14 @@ deps:
 	mkdir -p third_party/riscv-toolchain && cd third_party && case $(RISCV_TC_PKG) in \
 	  *.zip) unzip -q $(RISCV_TC_PKG) -d riscv-toolchain ;; *) tar xzf $(RISCV_TC_PKG) -C riscv-toolchain ;; esac
 	rm third_party/$(RISCV_TC_PKG)
+
+# Run after make deps, which fetches pico-sdk
+deps-rp2040:
+	curl -sL -o third_party/$(ARM_TC_PKG) $(ARM_TC_REL)/$(ARM_TC_PKG)
+	cd third_party && echo "$(ARM_TC_SUM)  $(ARM_TC_PKG)" | (shasum -a 256 -c 2>/dev/null || sha256sum -c)
+	mkdir -p third_party/arm-toolchain && tar xJf third_party/$(ARM_TC_PKG) -C third_party/arm-toolchain --strip-components=1
+	rm third_party/$(ARM_TC_PKG)
+.PHONY: deps-rp2040
 
 # Dependencies for CI host checks; excludes hardware and QEMU requirements
 deps-host:
